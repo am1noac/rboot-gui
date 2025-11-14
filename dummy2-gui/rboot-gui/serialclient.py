@@ -42,12 +42,17 @@ class SerialClient:
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=1.0,
-                write_timeout=1.0
+                timeout=0.5,  # 读取超时
+                write_timeout=3.0  # 写入超时增加到3秒
             )
 
             if self.serial_port.is_open:
+                # 清空缓冲区
+                self.serial_port.reset_input_buffer()
+                self.serial_port.reset_output_buffer()
+
                 self.connected = True
+                self._stop_receive = False
                 self.last_connect_time = time.time()
                 print(f"成功连接到 {self.port}")
                 return True
@@ -74,11 +79,11 @@ class SerialClient:
         :param body2: 消息体2 (bytes)
         :param msg_type: 消息类型
         """
-        if not self.connected:
+        if not self.connected or not self.serial_port or not self.serial_port.is_open:
             print("未连接,无法发送消息")
             return False
 
-        max_retries = 2
+        max_retries = 3
         for attempt in range(max_retries):
             try:
                 # 构建消息
@@ -104,50 +109,87 @@ class SerialClient:
                 bytes_written = self.serial_port.write(message)
                 self.serial_port.flush()  # 确保数据发送完成
 
-                # 打印调试信息
-                hex_msg = ' '.join(f'{b:02X}' for b in message)
-                print(f"发送: {hex_msg} (尝试 {attempt + 1})")
+                # 打印调试信息(减少日志输出)
+                if attempt > 0:  # 只在重试时打印
+                    hex_msg = ' '.join(f'{b:02X}' for b in message)
+                    print(f"发送: {hex_msg} (尝试 {attempt + 1})")
                 return True
 
             except serial.SerialTimeoutException:
                 print(f"发送超时 (尝试 {attempt + 1})")
                 if attempt < max_retries - 1:
-                    time.sleep(0.1)
+                    time.sleep(0.05)  # 短暂延迟
+                    # 不要断开连接，继续重试
                 else:
-                    self.connected = False
+                    print(f"发送消息最终失败,但保持连接")
+                    # 不断开连接，因为串口可能只是暂时繁忙
                     return False
             except Exception as e:
                 print(f"发送失败 (尝试 {attempt + 1}): {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(0.1)
+                    time.sleep(0.05)
                 else:
-                    self.connected = False
+                    # 只有在严重错误时才断开连接
+                    if "closed" in str(e).lower() or "not open" in str(e).lower():
+                        print(f"串口已关闭，断开连接")
+                        self.connected = False
                     return False
 
+        return False
+
     def receive_messages(self):
-        """接收消息线程"""
+        """接收消息线程 - 改进的数据接收逻辑"""
         print("接收线程启动")
         if not self.connected:
             return
 
+        buffer = bytearray()  # 用于累积接收的数据
+        message_length = 12  # 消息长度
+
         while not self._stop_receive:
             try:
-                if self.serial_port.in_waiting > 0:
-                    # 读取可用数据
-                    data = self.serial_port.read(self.serial_port.in_waiting)
+                if self.serial_port and self.serial_port.is_open and self.serial_port.in_waiting > 0:
+                    # 读取可用数据并添加到缓冲区
+                    chunk = self.serial_port.read(self.serial_port.in_waiting)
+                    buffer.extend(chunk)
 
-                    if data:
-                        hex_data = ' '.join(f'{b:02X}' for b in data)
-                        print(f"收到: {hex_data}")
+                    # 查找消息头 0xbb
+                    while len(buffer) >= message_length:
+                        # 查找消息头
+                        start_idx = buffer.find(0xbb)
 
-                        if self.callback:
-                            self.callback(hex_data)
+                        if start_idx == -1:
+                            # 没有找到消息头,清空缓冲区
+                            buffer.clear()
+                            break
+
+                        # 移除消息头之前的数据
+                        if start_idx > 0:
+                            buffer = buffer[start_idx:]
+
+                        # 检查是否有完整的消息
+                        if len(buffer) >= message_length:
+                            # 提取一个完整消息
+                            message = buffer[:message_length]
+                            buffer = buffer[message_length:]
+
+                            # 将消息转换为十六进制字符串
+                            hex_data = ' '.join(f'{b:02X}' for b in message)
+                            print(f"收到: {hex_data}")
+
+                            # 调用回调函数
+                            if self.callback:
+                                self.callback(hex_data)
+                        else:
+                            # 消息不完整,等待更多数据
+                            break
                 else:
-                    time.sleep(0.01)  # 避免CPU占用过高
+                    time.sleep(0.005)  # 减少CPU占用
 
             except serial.SerialException as e:
                 if not self._stop_receive:
                     print(f"串口读取错误: {e}")
+                    self.connected = False
                     break
             except Exception as e:
                 if not self._stop_receive:
