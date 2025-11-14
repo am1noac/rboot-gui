@@ -40,33 +40,40 @@ class SerialClient:
             print(f"尝试连接串口 {self.port},波特率 {self.baudrate}")
 
             # 创建串口连接
-            self.serial_port = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=0.5,  # 读取超时
-                write_timeout=self.write_timeout,  # 写入超时(None=无限等待)
-                xonxoff=False,  # 禁用软件流控
-                rtscts=False,  # 禁用硬件流控
-                dsrdtr=False  # 禁用DTR/DSR流控
-            )
+            print("正在打开串口...")
+            self.serial_port = serial.Serial()
+            self.serial_port.port = self.port
+            self.serial_port.baudrate = self.baudrate
+            self.serial_port.bytesize = serial.EIGHTBITS
+            self.serial_port.parity = serial.PARITY_NONE
+            self.serial_port.stopbits = serial.STOPBITS_ONE
+            self.serial_port.timeout = 0.5
+            self.serial_port.write_timeout = self.write_timeout
+            self.serial_port.xonxoff = False
+            self.serial_port.rtscts = False
+            self.serial_port.dsrdtr = False
+
+            print("调用serial.open()...")
+            self.serial_port.open()
+            print("serial.open()完成")
 
             if self.serial_port.is_open:
+                print("串口已打开，设置控制信号...")
                 # 设置DTR和RTS信号
                 self.serial_port.dtr = True
                 self.serial_port.rts = True
+                print("控制信号已设置，等待稳定...")
                 time.sleep(0.1)  # 等待信号稳定
 
                 # 清空缓冲区
+                print("清空缓冲区...")
                 self.serial_port.reset_input_buffer()
                 self.serial_port.reset_output_buffer()
 
                 self.connected = True
                 self._stop_receive = False
                 self.last_connect_time = time.time()
-                print(f"成功连接到 {self.port}")
+                print(f"✓ 成功连接到 {self.port}")
                 print(f"DTR: {self.serial_port.dtr}, RTS: {self.serial_port.rts}")
                 return True
             else:
