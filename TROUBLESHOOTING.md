@@ -1,6 +1,85 @@
 # Rboot GUI 故障排除指南
 
-## 问题1: 连接设备时超时
+## 连接模式说明
+
+Rboot GUI支持两种连接模式:
+
+1. **串口模式 (USB)** - 默认模式
+   - 通过USB线直接连接设备
+   - 使用COM端口通信 (如COM7, /dev/ttyUSB0)
+   - 波特率: 115200
+   - 适用于USB直连的dummy机械臂
+
+2. **网络模式 (UDP)**
+   - 通过以太网连接设备
+   - 使用UDP协议通信
+   - 默认地址: 192.168.0.4:3333
+   - 适用于网络版控制器
+
+---
+
+## 问题1A: 串口连接超时 (USB模式)
+
+### 症状
+- 点击"连接设备"按钮后显示串口连接失败
+- 控制台显示"serial.open()超时（5秒）"
+- 需要反复重新插拔USB线
+
+### 解决方案
+
+#### 方案1: 运行串口诊断工具
+```bash
+cd dummy2-gui/rboot-gui
+
+# 列出所有串口
+python reset_port.py list
+
+# 测试指定串口
+python reset_port.py test COM7
+
+# 重置串口
+python reset_port.py reset COM7
+```
+
+#### 方案2: 检查串口占用
+**Windows:**
+- 打开设备管理器
+- 展开"端口(COM和LPT)"
+- 查看是否有黄色感叹号
+- 确认COM端口号
+
+**Linux:**
+```bash
+# 列出串口设备
+ls -l /dev/ttyUSB* /dev/ttyACM*
+
+# 检查权限
+sudo usermod -a -G dialout $USER  # 添加用户到dialout组
+# 需要重新登录生效
+
+# 检查是否被占用
+lsof /dev/ttyUSB0
+```
+
+#### 方案3: 安装/更新驱动
+- **CH340/CH341**: 常见的USB转串口芯片
+- **CP210x**: Silicon Labs USB转串口
+- **FTDI**: FTDI USB转串口
+
+下载对应驱动并安装
+
+#### 方案4: 手动指定端口
+在`main.py`中修改:
+```python
+# 第65行左右
+client_instance = SerialClient(port='COM7', baudrate=115200)  # Windows
+# 或
+client_instance = SerialClient(port='/dev/ttyUSB0', baudrate=115200)  # Linux
+```
+
+---
+
+## 问题1B: 网络连接超时 (UDP模式)
 
 ### 症状
 - 点击"连接设备"按钮后显示连接失败
@@ -171,22 +250,47 @@ register_cb.polling_timer = ui.timer(1.0, lambda: poll_motors())  # 改为1秒�
 
 ## 诊断命令速查表
 
+### 串口模式诊断
 ```bash
+cd dummy2-gui/rboot-gui
+
+# 列出所有串口
+python reset_port.py list
+
+# 测试串口连接
+python reset_port.py test COM7 115200
+
+# 重置串口
+python reset_port.py reset COM7
+
+# 运行完整串口诊断
+python reset_port.py
+```
+
+### 网络模式诊断
+```bash
+cd dummy2-gui/rboot-gui
+
 # 测试网络连通性
 ping 192.168.0.4
 
-# 运行完整诊断
-python dummy2-gui/rboot-gui/reset_network.py
+# 运行完整网络诊断
+python reset_network.py
 
 # 仅测试连接
-python dummy2-gui/rboot-gui/reset_network.py test
+python reset_network.py test
 
 # 重置网络
-python dummy2-gui/rboot-gui/reset_network.py reset
+python reset_network.py reset
+```
 
-# 启动GUI
+### 启动程序
+```bash
 cd dummy2-gui/rboot-gui
 python main.py
+
+# 安装依赖（首次运行）
+pip install -r ../requirements.txt
 ```
 
 ---
@@ -195,11 +299,19 @@ python main.py
 
 | 错误信息 | 原因 | 解决方法 |
 |---------|------|---------|
+| **串口模式** | | |
+| `serial.open()超时` | 串口被占用或驱动异常 | 运行 reset_port.py，重新插拔USB |
+| `Permission denied` | Linux权限不足 | sudo usermod -a -G dialout $USER |
+| `Port not found` | 端口不存在 | 运行 reset_port.py list 查看可用端口 |
+| `串口错误` | 设备断开或驱动问题 | 检查USB连接，重新安装驱动 |
+| **网络模式** | | |
 | `✗ 连接失败` | 设备未连接或IP错误 | ping 192.168.0.4 检查连通性 |
-| `发送超时` | 发送过快或设备无响应 | 检查CAN总线是否启用 |
-| `未连接，无法发送消息` | UDP连接断开 | 重新点击"连接设备" |
-| `连接过于频繁` | 点击连接按钮太快 | 等待0.5秒后重试 |
 | `接收错误` | 网络异常或设备断开 | 检查网线，重启设备 |
+| **通用** | | |
+| `发送超时` | 发送过快或设备无响应 | 检查CAN总线是否启用 |
+| `未连接，无法发送消息` | 连接断开 | 重新点击"连接设备" |
+| `连接过于频繁` | 点击连接按钮太快 | 等待0.5秒后重试 |
+| `缺少pyserial库` | 未安装串口库 | pip install pyserial |
 
 ---
 
