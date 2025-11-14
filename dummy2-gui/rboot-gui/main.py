@@ -21,16 +21,27 @@ def create_ui():
             ip_input = ui.input('IP地址', value='192.168.0.4').props('dense')
             port_input = ui.number('端口', value=3333, format='%d', min=1, max=65535).props('dense')
         with ui.row():
-            ui.label('提示: 常用端口有 3333, 8080, 5000, 6000, 9000').classes('text-caption')
+            ui.label('提示: 常用端口 3333, 4444, 5000, 6000, 8080, 9000').classes('text-caption')
         with ui.row():
             def test_port(p):
                 port_input.value = p
                 ui.notify(f'端口已设置为 {p}，请点击"连接设备"测试', type='info')
-            ui.button('试试 3333', on_click=lambda: test_port(3333)).props('dense flat')
-            ui.button('试试 8080', on_click=lambda: test_port(8080)).props('dense flat')
-            ui.button('试试 5000', on_click=lambda: test_port(5000)).props('dense flat')
-            ui.button('试试 6000', on_click=lambda: test_port(6000)).props('dense flat')
-            ui.button('试试 9000', on_click=lambda: test_port(9000)).props('dense flat')
+            ui.button('3333', on_click=lambda: test_port(3333)).props('dense flat size=sm')
+            ui.button('4444', on_click=lambda: test_port(4444)).props('dense flat size=sm color=primary')
+            ui.button('5000', on_click=lambda: test_port(5000)).props('dense flat size=sm')
+            ui.button('6000', on_click=lambda: test_port(6000)).props('dense flat size=sm')
+            ui.button('8080', on_click=lambda: test_port(8080)).props('dense flat size=sm')
+            ui.button('9000', on_click=lambda: test_port(9000)).props('dense flat size=sm')
+        ui.markdown('''
+**如何判断端口正确？**
+- ❌ 错误端口：大量 "UDP接收警告 (错误码 10054)"
+- ✅ 正确端口：出现 "收到: AA XX XX ..." 日志
+
+**查找正确端口的方法：**
+1. 查看设备文档或配置界面
+2. 使用 Wireshark 抓包查看设备通信端口
+3. 逐个测试上面的常用端口
+        ''').classes('text-caption bg-blue-50 p-2 rounded')
 
     container = ui.column()
 
