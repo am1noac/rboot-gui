@@ -98,6 +98,10 @@ class UDPClient:
 
         while not self._stop_receive:
             try:
+                if not self.client_socket:
+                    print("Socket已关闭，停止接收")
+                    break
+
                 data, addr = self.client_socket.recvfrom(1024)
                 if data:
                     hex_data = ' '.join(f'{b:02X}' for b in data)
@@ -108,6 +112,12 @@ class UDPClient:
 
             except socket.timeout:
                 continue  # 超时正常
+            except OSError as e:
+                if not self._stop_receive:
+                    # Windows错误码 10054: 远程主机强制关闭连接
+                    print(f"连接已断开: {e}")
+                    self.connected = False
+                    break
             except Exception as e:
                 if not self._stop_receive:
                     print(f"接收错误: {e}")
@@ -117,6 +127,11 @@ class UDPClient:
 
     def start_receive_thread(self):
         """启动接收线程"""
+        # 检查是否已有线程在运行
+        if self.receive_thread and self.receive_thread.is_alive():
+            print("接收线程已在运行，跳过启动")
+            return
+
         if self.connected and not self._stop_receive:
             self.receive_thread = threading.Thread(target=self.receive_messages)
             self.receive_thread.daemon = True
@@ -125,6 +140,13 @@ class UDPClient:
 
     def register_callback(self, callback):
         """注册回调函数并启动接收线程"""
+        # 先停止旧线程（如果存在）
+        if self.receive_thread and self.receive_thread.is_alive():
+            print("停止旧的接收线程...")
+            self._stop_receive = True
+            self.receive_thread.join(timeout=1.0)
+
+        # 设置新回调并启动线程
         self.callback = callback
         self._stop_receive = False
         self.start_receive_thread()
@@ -145,8 +167,9 @@ class UDPClient:
         self._stop_receive = True
         self.connected = False
 
-        if self.receive_thread:
+        if self.receive_thread and self.receive_thread.is_alive():
             self.receive_thread.join(timeout=1.0)
+            self.receive_thread = None
 
         if self.client_socket:
             try:
