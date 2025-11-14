@@ -188,15 +188,23 @@ def controls(client) -> None:
             return
         # 向所有6个电机发送Get_Encoder_Estimates查询
         for motor_id in range(1, 7):
+            # 构造查询消息 - 使用空的body
             client.send_message(motor_id, can_data.command_id['Get_Encoder_Estimates'],
                               struct.pack('<I', 0), struct.pack('<I', 0),
                               can_data.Message_type['short'])
-        # 同时查询其他数据
-        for motor_id in range(1, 7):
-            # 查询电压和电流
-            client.send_message(motor_id, can_data.command_id['Get_Bus_Voltage_Current'],
-                              struct.pack('<I', 0), struct.pack('<I', 0),
-                              can_data.Message_type['short'])
+            time.sleep(0.005)  # 短暂延迟避免消息过快
+
+    def test_single_query():
+        """测试查询单个电机 - 调试用"""
+        motor_id = 1
+        print(f"\n=== 测试查询电机 {motor_id} ===")
+        result = client.send_message(motor_id, can_data.command_id['Get_Encoder_Estimates'],
+                          struct.pack('<I', 0), struct.pack('<I', 0),
+                          can_data.Message_type['short'])
+        if result:
+            print("查询命令已发送，等待响应...")
+        else:
+            print("查询命令发送失败！")
 
     def register_cb():
         """注册UDP回调，开始接收CAN数据"""
@@ -204,10 +212,14 @@ def controls(client) -> None:
 
         client.register_callback(udp_callback)
 
+        # 先发送一条测试命令
+        print("\n=== 开始CAN通信 ===")
+        test_single_query()
+
         # 启动定时轮询（每100ms查询一次）
         if polling_timer is None:
-            polling_timer = ui.timer(0.1, poll_motor_data)
-            print("已启动电机数据轮询定时器")
+            polling_timer = ui.timer(0.5, poll_motor_data)  # 先用0.5秒测试
+            print("已启动电机数据轮询定时器（0.5秒间隔）")
 
         info_status.set_text('CAN BUS: 已启用 ✓')
         info_status.style('color: #03fc1c; font-weight: bold')
@@ -241,17 +253,19 @@ def controls(client) -> None:
             #                 # name='Status',
             #                 stamp='now',
             #                 avatar='https://robohash.org/ui')
-            
+
         with ui.row():
-            ui.button(on_click=register_cb).props('icon=radio_button_checked round') \
-                                    .tooltip('Connect to CAN BUS')
-            ui.button(on_click=unregister_cb).props('icon=cancel round') \
-                                    .tooltip('Disconnect to CAN BUS')
+            ui.button(on_click=register_cb).props('icon=radio_button_checked round color=positive') \
+                                    .tooltip('连接CAN BUS并开始轮询')
+            ui.button(on_click=unregister_cb).props('icon=cancel round color=negative') \
+                                    .tooltip('断开CAN BUS连接')
+            ui.button(on_click=test_single_query).props('icon=bug_report round color=info') \
+                                    .tooltip('测试单次查询（调试）')
             ui.button(on_click=lambda: send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['CLOSED_LOOP_CONTROL'], 0)) \
                 .props('icon=repeat round') \
-                .tooltip('Enable all joints to close loop mode')
+                .tooltip('启用所有关节到闭环模式')
             ui.button(on_click=lambda: send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], 0)).props('icon=close round') \
-                .tooltip('Enable all joints to idle mode')
+                .tooltip('设置所有关节为空闲模式')
 
         # with ui.row():
         #     ui.button(on_click=lambda: client.send_message("enable")) \

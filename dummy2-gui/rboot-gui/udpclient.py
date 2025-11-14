@@ -90,7 +90,10 @@ class UDPClient:
 
                 # 发送消息
                 self.client_socket.sendto(message, (self.server_address, self.server_port))
-                print(f"消息发送成功 (尝试 {attempt + 1})")
+                # 调试：打印发送的消息
+                if id <= 2:  # 只打印前2个电机的消息，避免日志过多
+                    hex_msg = ' '.join(f'{b:02X}' for b in message)
+                    print(f"发送-> ID:{id} CMD:{cmd} [{hex_msg}]")
                 return True
 
             except Exception as e:
