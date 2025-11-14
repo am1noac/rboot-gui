@@ -5,14 +5,16 @@ import struct
 
 
 class SerialClient:
-    def __init__(self, port='COM7', baudrate=115200):
+    def __init__(self, port='COM7', baudrate=115200, write_timeout=None):
         """
         初始化串口客户端
         :param port: 串口端口号,默认COM7
         :param baudrate: 波特率,默认115200
+        :param write_timeout: 写超时时间(秒),None表示无限等待
         """
         self.port = port
         self.baudrate = baudrate
+        self.write_timeout = write_timeout  # None = 无限等待，可能更适合某些设备
         self.serial_port = None
         self.connected = False
         self._stop_receive = False
@@ -43,10 +45,18 @@ class SerialClient:
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
                 timeout=0.5,  # 读取超时
-                write_timeout=3.0  # 写入超时增加到3秒
+                write_timeout=self.write_timeout,  # 写入超时(None=无限等待)
+                xonxoff=False,  # 禁用软件流控
+                rtscts=False,  # 禁用硬件流控
+                dsrdtr=False  # 禁用DTR/DSR流控
             )
 
             if self.serial_port.is_open:
+                # 设置DTR和RTS信号
+                self.serial_port.dtr = True
+                self.serial_port.rts = True
+                time.sleep(0.1)  # 等待信号稳定
+
                 # 清空缓冲区
                 self.serial_port.reset_input_buffer()
                 self.serial_port.reset_output_buffer()
@@ -55,6 +65,7 @@ class SerialClient:
                 self._stop_receive = False
                 self.last_connect_time = time.time()
                 print(f"成功连接到 {self.port}")
+                print(f"DTR: {self.serial_port.dtr}, RTS: {self.serial_port.rts}")
                 return True
             else:
                 print("无法打开串口")
