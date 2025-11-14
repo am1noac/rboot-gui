@@ -19,7 +19,7 @@ def create_ui():
         global client_instance
 
         try:
-            from udpclient import UDPClient
+            from serialclient import SerialClient
             from controls import controls
 
             # 如果已有连接，先关闭
@@ -32,8 +32,8 @@ def create_ui():
 
             status.set_text('连接中...')
 
-            # 创建新连接
-            client_instance = UDPClient('192.168.0.4', 3333)
+            # 创建新的串口连接 (COM7, 波特率115200)
+            client_instance = SerialClient('COM7', 115200)
 
             if client_instance.connect():
                 client_instance.start_receive_thread()
@@ -47,7 +47,7 @@ def create_ui():
                 ui.notify('设备连接成功!')
             else:
                 status.set_text('连接失败')
-                ui.notify('连接失败，请检查设备状态')
+                ui.notify('连接失败，请检查COM7端口和设备状态')
                 client_instance = None
 
         except Exception as e:

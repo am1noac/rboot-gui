@@ -1,0 +1,194 @@
+import serial
+import threading
+import time
+import struct
+
+
+class SerialClient:
+    def __init__(self, port='COM7', baudrate=115200):
+        """
+        初始化串口客户端
+        :param port: 串口端口号,默认COM7
+        :param baudrate: 波特率,默认115200
+        """
+        self.port = port
+        self.baudrate = baudrate
+        self.serial_port = None
+        self.connected = False
+        self._stop_receive = False
+        self.receive_thread = None
+        self.callback = None
+        self.last_connect_time = 0
+        self.connect_interval = 2.0  # 最小连接间隔
+
+    def connect(self):
+        """连接串口"""
+        # 检查连接间隔
+        current_time = time.time()
+        if current_time - self.last_connect_time < self.connect_interval:
+            print("连接过于频繁,等待...")
+            time.sleep(self.connect_interval)
+
+        try:
+            # 关闭旧连接
+            self.close()
+
+            print(f"尝试连接串口 {self.port},波特率 {self.baudrate}")
+
+            # 创建串口连接
+            self.serial_port = serial.Serial(
+                port=self.port,
+                baudrate=self.baudrate,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=1.0,
+                write_timeout=1.0
+            )
+
+            if self.serial_port.is_open:
+                self.connected = True
+                self.last_connect_time = time.time()
+                print(f"成功连接到 {self.port}")
+                return True
+            else:
+                print("无法打开串口")
+                self.connected = False
+                return False
+
+        except serial.SerialException as e:
+            print(f"串口连接失败: {e}")
+            self.connected = False
+            return False
+        except Exception as e:
+            print(f"连接失败: {e}")
+            self.connected = False
+            return False
+
+    def send_message(self, id, cmd, body1, body2, msg_type):
+        """
+        发送消息 - 增加重试机制
+        :param id: 设备ID
+        :param cmd: 命令
+        :param body1: 消息体1 (bytes)
+        :param body2: 消息体2 (bytes)
+        :param msg_type: 消息类型
+        """
+        if not self.connected:
+            print("未连接,无法发送消息")
+            return False
+
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                # 构建消息
+                if msg_type == 0:  # short message
+                    message = bytearray(12)
+                    message[0] = 0xbb
+                    message[1] = id
+                    message[2] = cmd
+
+                    # 填充数据
+                    if len(body1) >= 4:
+                        message[3:7] = body1[:4]
+                    if len(body2) >= 4:
+                        message[7:11] = body2[:4]
+
+                    # 计算校验和
+                    checksum = 0
+                    for byte in body1[:4]:
+                        checksum ^= byte
+                    message[11] = checksum
+
+                # 发送消息
+                bytes_written = self.serial_port.write(message)
+                self.serial_port.flush()  # 确保数据发送完成
+
+                # 打印调试信息
+                hex_msg = ' '.join(f'{b:02X}' for b in message)
+                print(f"发送: {hex_msg} (尝试 {attempt + 1})")
+                return True
+
+            except serial.SerialTimeoutException:
+                print(f"发送超时 (尝试 {attempt + 1})")
+                if attempt < max_retries - 1:
+                    time.sleep(0.1)
+                else:
+                    self.connected = False
+                    return False
+            except Exception as e:
+                print(f"发送失败 (尝试 {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(0.1)
+                else:
+                    self.connected = False
+                    return False
+
+    def receive_messages(self):
+        """接收消息线程"""
+        print("接收线程启动")
+        if not self.connected:
+            return
+
+        while not self._stop_receive:
+            try:
+                if self.serial_port.in_waiting > 0:
+                    # 读取可用数据
+                    data = self.serial_port.read(self.serial_port.in_waiting)
+
+                    if data:
+                        hex_data = ' '.join(f'{b:02X}' for b in data)
+                        print(f"收到: {hex_data}")
+
+                        if self.callback:
+                            self.callback(hex_data)
+                else:
+                    time.sleep(0.01)  # 避免CPU占用过高
+
+            except serial.SerialException as e:
+                if not self._stop_receive:
+                    print(f"串口读取错误: {e}")
+                    break
+            except Exception as e:
+                if not self._stop_receive:
+                    print(f"接收错误: {e}")
+                    break
+
+        print("接收线程停止")
+
+    def start_receive_thread(self):
+        """启动接收线程"""
+        if self.connected and not self._stop_receive:
+            self._stop_receive = False
+            self.receive_thread = threading.Thread(target=self.receive_messages)
+            self.receive_thread.daemon = True
+            self.receive_thread.start()
+            print("接收线程已启动")
+
+    def register_callback(self, callback):
+        """注册数据接收回调函数"""
+        self.callback = callback
+        print("回调函数已注册")
+
+    def unregister_callback(self):
+        """取消注册回调函数"""
+        self.callback = None
+        print("回调函数已取消")
+
+    def close(self):
+        """关闭串口连接"""
+        print("关闭串口连接")
+        self._stop_receive = True
+        self.connected = False
+
+        if self.receive_thread and self.receive_thread.is_alive():
+            self.receive_thread.join(timeout=1.0)
+
+        if self.serial_port and self.serial_port.is_open:
+            try:
+                self.serial_port.close()
+                print("串口已关闭")
+            except Exception as e:
+                print(f"关闭串口时出错: {e}")
+            finally:
+                self.serial_port = None
