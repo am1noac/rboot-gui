@@ -33,6 +33,15 @@ class UDPClient:
             self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.client_socket.settimeout(3.0)
 
+            # 绑定本地端口，让设备知道往哪里回复
+            # 使用 0.0.0.0 绑定所有网络接口
+            try:
+                self.client_socket.bind(('0.0.0.0', 0))  # 0 = 让系统分配端口
+                local_port = self.client_socket.getsockname()[1]
+                print(f"本地绑定端口: {local_port}")
+            except Exception as e:
+                print(f"绑定本地端口失败: {e}")
+
             # Windows特殊处理：禁用ICMP错误报告，防止10054错误
             # SIO_UDP_CONNRESET = 0x9800000C
             try:
@@ -72,7 +81,7 @@ class UDPClient:
                 # 构建消息
                 if msg_type == 0:  # short message
                     message = bytearray(12)
-                    message[0] = 0xbb
+                    message[0] = 0xbb  # 发送消息头（0xBB），接收是 0xAA
                     message[1] = id
                     message[2] = cmd
 
