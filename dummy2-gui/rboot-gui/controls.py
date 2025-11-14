@@ -178,15 +178,20 @@ def controls(client) -> None:
 
     def udp_callback(data):
          update(data)
-    
+
     def register_cb():
-        client.register_callback(udp_callback) 
-        send_msg(1, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], can_data.Message_type['short'])        
+        """注册UDP回调，开始接收CAN数据"""
+        client.register_callback(udp_callback)
+        info_status.set_text('CAN BUS: 等待数据...')
+        info_status.style('color: #ffa500; font-weight: bold')
+        ui.notify('已连接CAN BUS，等待接收数据', type='info')
 
     def unregister_cb():
-        client.unregister_callback() 
-        info_status.set_text(f'CAN BUS: Not enabled')
+        """注销UDP回调，停止接收数据"""
+        client.unregister_callback()
+        info_status.set_text('CAN BUS: 未启用')
         info_status.style('color: #fc0320; font-weight: bold')
+        ui.notify('已断开CAN BUS连接', type='warning')
 
     # with ui.row().classes('w-full justify-between items-center'):
     #     with ui.row():

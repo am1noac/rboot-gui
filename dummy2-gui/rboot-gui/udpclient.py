@@ -33,6 +33,18 @@ class UDPClient:
             self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.client_socket.settimeout(3.0)
 
+            # Windows特殊处理：禁用ICMP错误报告，防止10054错误
+            # SIO_UDP_CONNRESET = 0x9800000C
+            try:
+                import platform
+                if platform.system() == 'Windows':
+                    import ctypes
+                    SIO_UDP_CONNRESET = 0x9800000C
+                    self.client_socket.ioctl(SIO_UDP_CONNRESET, False)
+                    print("已禁用UDP ICMP错误报告（Windows优化）")
+            except Exception as e:
+                print(f"Windows UDP优化失败（可忽略）: {e}")
+
             print(f"尝试连接 {self.server_address}:{self.server_port}")
 
             # 不发送测试消息，直接标记为连接
@@ -114,10 +126,16 @@ class UDPClient:
                 continue  # 超时正常
             except OSError as e:
                 if not self._stop_receive:
-                    # Windows错误码 10054: 远程主机强制关闭连接
-                    print(f"连接已断开: {e}")
-                    self.connected = False
-                    break
+                    # Windows错误码 10054/10040: UDP接收错误
+                    # 这些错误在UDP中不是致命的，可以继续接收
+                    error_code = getattr(e, 'winerror', None) or getattr(e, 'errno', None)
+                    if error_code in (10054, 10040):
+                        print(f"UDP接收警告 (错误码 {error_code}): {e} - 继续接收...")
+                        continue  # 继续尝试接收
+                    else:
+                        print(f"连接错误: {e}")
+                        self.connected = False
+                        break
             except Exception as e:
                 if not self._stop_receive:
                     print(f"接收错误: {e}")
