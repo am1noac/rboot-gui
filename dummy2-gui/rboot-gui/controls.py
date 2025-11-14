@@ -123,11 +123,14 @@ def check_and_print_buffer():
         print_buffer()
         
 def controls(client) -> None:
+    # 定时器引用（用于启动/停止数据轮询）
+    polling_timer = None
+
     def get_reduction(i):
-        motor_keys = list(motors_cfg.keys()) 
+        motor_keys = list(motors_cfg.keys())
         motor_name = motor_keys[i]
         return motors_cfg[motor_name]['reduction']
-         
+
     def send_msg(id, type, cmd1, cmd2) -> None:
          client.send_message(id, type, struct.pack('<I', cmd1), struct.pack('<I', cmd2), can_data.Message_type['short'])
 
@@ -179,15 +182,47 @@ def controls(client) -> None:
     def udp_callback(data):
          update(data)
 
+    def poll_motor_data():
+        """定期查询所有电机的位置和速度数据"""
+        if not client.connected:
+            return
+        # 向所有6个电机发送Get_Encoder_Estimates查询
+        for motor_id in range(1, 7):
+            client.send_message(motor_id, can_data.command_id['Get_Encoder_Estimates'],
+                              struct.pack('<I', 0), struct.pack('<I', 0),
+                              can_data.Message_type['short'])
+        # 同时查询其他数据
+        for motor_id in range(1, 7):
+            # 查询电压和电流
+            client.send_message(motor_id, can_data.command_id['Get_Bus_Voltage_Current'],
+                              struct.pack('<I', 0), struct.pack('<I', 0),
+                              can_data.Message_type['short'])
+
     def register_cb():
         """注册UDP回调，开始接收CAN数据"""
+        nonlocal polling_timer
+
         client.register_callback(udp_callback)
-        info_status.set_text('CAN BUS: 等待数据...')
-        info_status.style('color: #ffa500; font-weight: bold')
-        ui.notify('已连接CAN BUS，等待接收数据', type='info')
+
+        # 启动定时轮询（每100ms查询一次）
+        if polling_timer is None:
+            polling_timer = ui.timer(0.1, poll_motor_data)
+            print("已启动电机数据轮询定时器")
+
+        info_status.set_text('CAN BUS: 已启用 ✓')
+        info_status.style('color: #03fc1c; font-weight: bold')
+        ui.notify('已连接CAN BUS，开始查询电机数据', type='positive')
 
     def unregister_cb():
         """注销UDP回调，停止接收数据"""
+        nonlocal polling_timer
+
+        # 停止定时轮询
+        if polling_timer is not None:
+            polling_timer.cancel()
+            polling_timer = None
+            print("已停止电机数据轮询定时器")
+
         client.unregister_callback()
         info_status.set_text('CAN BUS: 未启用')
         info_status.style('color: #fc0320; font-weight: bold')
