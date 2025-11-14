@@ -5,16 +5,16 @@ import struct
 
 
 class SerialClient:
-    def __init__(self, port='COM7', baudrate=115200, write_timeout=None):
+    def __init__(self, port='COM7', baudrate=115200, write_timeout=1.0):
         """
         初始化串口客户端
         :param port: 串口端口号,默认COM7
         :param baudrate: 波特率,默认115200
-        :param write_timeout: 写超时时间(秒),None表示无限等待
+        :param write_timeout: 写超时时间(秒),默认1.0秒
         """
         self.port = port
         self.baudrate = baudrate
-        self.write_timeout = write_timeout  # None = 无限等待，可能更适合某些设备
+        self.write_timeout = write_timeout if write_timeout is not None else 1.0
         self.serial_port = None
         self.connected = False
         self._stop_receive = False
@@ -22,6 +22,8 @@ class SerialClient:
         self.callback = None
         self.last_connect_time = 0
         self.connect_interval = 2.0  # 最小连接间隔
+        self.last_send_time = 0  # 上次发送时间
+        self.min_send_interval = 0.01  # 最小发送间隔10ms
 
     def connect(self):
         """连接串口"""
@@ -83,7 +85,7 @@ class SerialClient:
 
     def send_message(self, id, cmd, body1, body2, msg_type):
         """
-        发送消息 - 增加重试机制
+        发送消息 - 增加重试机制和发送间隔控制
         :param id: 设备ID
         :param cmd: 命令
         :param body1: 消息体1 (bytes)
@@ -93,6 +95,12 @@ class SerialClient:
         if not self.connected or not self.serial_port or not self.serial_port.is_open:
             print("未连接,无法发送消息")
             return False
+
+        # 控制发送间隔，避免发送过快导致缓冲区满
+        current_time = time.time()
+        time_since_last_send = current_time - self.last_send_time
+        if time_since_last_send < self.min_send_interval:
+            time.sleep(self.min_send_interval - time_since_last_send)
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -120,6 +128,9 @@ class SerialClient:
                 bytes_written = self.serial_port.write(message)
                 self.serial_port.flush()  # 确保数据发送完成
 
+                # 更新最后发送时间
+                self.last_send_time = time.time()
+
                 # 打印调试信息(减少日志输出)
                 if attempt > 0:  # 只在重试时打印
                     hex_msg = ' '.join(f'{b:02X}' for b in message)
@@ -129,7 +140,7 @@ class SerialClient:
             except serial.SerialTimeoutException:
                 print(f"发送超时 (尝试 {attempt + 1})")
                 if attempt < max_retries - 1:
-                    time.sleep(0.05)  # 短暂延迟
+                    time.sleep(0.02)  # 短暂延迟
                     # 不要断开连接，继续重试
                 else:
                     print(f"发送消息最终失败,但保持连接")
@@ -138,7 +149,7 @@ class SerialClient:
             except Exception as e:
                 print(f"发送失败 (尝试 {attempt + 1}): {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(0.05)
+                    time.sleep(0.02)
                 else:
                     # 只有在严重错误时才断开连接
                     if "closed" in str(e).lower() or "not open" in str(e).lower():
