@@ -23,7 +23,16 @@ class SerialClient:
         self.last_connect_time = 0
         self.connect_interval = 2.0  # 最小连接间隔
         self.last_send_time = 0  # 上次发送时间
-        self.min_send_interval = 0.05  # 最小发送间隔50ms (从10ms增加到50ms)
+        # 根据波特率自动调整发送间隔
+        if baudrate <= 9600:
+            self.min_send_interval = 0.15  # 9600波特率使用150ms间隔
+        elif baudrate <= 19200:
+            self.min_send_interval = 0.1   # 19200波特率使用100ms间隔
+        elif baudrate <= 57600:
+            self.min_send_interval = 0.05  # 57600波特率使用50ms间隔
+        else:
+            self.min_send_interval = 0.02  # 115200及以上使用20ms间隔
+        print(f"设置发送间隔: {self.min_send_interval*1000:.0f}ms (波特率: {baudrate})")
 
     def connect(self):
         """连接串口"""
