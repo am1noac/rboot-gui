@@ -32,8 +32,8 @@ def create_ui():
 
             status.set_text('连接中...')
 
-            # 创建新的串口连接 (COM7, 波特率115200)
-            client_instance = SerialClient('COM7', 115200)
+            # 创建新的串口连接 (COM7, 波特率9600 - 测试通过)
+            client_instance = SerialClient('COM7', 9600)
 
             if client_instance.connect():
                 client_instance.start_receive_thread()
