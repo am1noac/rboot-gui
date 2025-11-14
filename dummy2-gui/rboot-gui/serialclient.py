@@ -63,7 +63,37 @@ class SerialClient:
             self.serial_port.dsrdtr = False
 
             print("调用serial.open()...")
-            self.serial_port.open()
+            # 使用多线程添加超时机制避免永久阻塞
+            open_success = [False]
+            open_error = [None]
+
+            def open_port():
+                try:
+                    self.serial_port.open()
+                    open_success[0] = True
+                except Exception as e:
+                    open_error[0] = e
+
+            open_thread = threading.Thread(target=open_port)
+            open_thread.daemon = True
+            open_thread.start()
+            open_thread.join(timeout=5.0)  # 5秒超时
+
+            if open_thread.is_alive():
+                print("✗ serial.open()超时（5秒）")
+                print("  可能原因：")
+                print("  1. 端口被其他程序占用")
+                print("  2. 端口状态异常")
+                print("  3. 需要重新插拔USB线")
+                print("\n  解决方法：")
+                print("  1. 运行: python reset_port.py")
+                print("  2. 或重新插拔USB线")
+                self.connected = False
+                return False
+
+            if open_error[0]:
+                raise open_error[0]
+
             print("serial.open()完成")
 
             if self.serial_port.is_open:
