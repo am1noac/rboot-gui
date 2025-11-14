@@ -127,8 +127,9 @@ def controls(client) -> None:
         motor_name = motor_keys[i]
         return motors_cfg[motor_name]['reduction']
          
-    def send_msg(id, type, cmd1, cmd2) -> None:
-         client.send_message(id, type, struct.pack('<I', cmd1), struct.pack('<I', cmd2), can_data.Message_type['short'])
+    def send_msg(id, type, cmd1, cmd2):
+         """发送CAN消息，返回是否成功"""
+         return client.send_message(id, type, struct.pack('<I', cmd1), struct.pack('<I', cmd2), can_data.Message_type['short'])
 
     def send_6d_msg(id, type, cmd1, cmd2) -> None:
         for i in range(6):
@@ -177,13 +178,45 @@ def controls(client) -> None:
 
     def udp_callback(data):
          update(data)
-    
+
     def register_cb():
-        client.register_callback(udp_callback) 
-        send_msg(1, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], can_data.Message_type['short'])        
+        print("\n=== 开始CAN通信 ===")
+
+        # 先注册回调函数
+        client.register_callback(udp_callback)
+
+        # 等待连接稳定
+        time.sleep(0.5)
+
+        # 测试查询电机1的状态
+        print("\n=== 测试查询电机 1 ===")
+        result = send_msg(1, can_data.command_id['Get_Encoder_Estimates'], 0, 0)
+
+        if result:
+            print("查询命令发送成功！")
+        else:
+            print("查询命令发送失败！")
+
+        # 启动定时轮询
+        if not hasattr(register_cb, 'polling_timer'):
+            register_cb.polling_timer = ui.timer(0.5, lambda: poll_motors())
+            print("已启动电机数据轮询定时器（0.5秒间隔）")
+
+    def poll_motors():
+        """定期轮询所有电机状态"""
+        # 查询所有电机的编码器位置
+        for i in range(1, 7):  # 6个电机
+            send_msg(i, can_data.command_id['Get_Encoder_Estimates'], 0, 0)
+            time.sleep(0.01)  # 10ms间隔
 
     def unregister_cb():
-        client.unregister_callback() 
+        # 停止轮询定时器
+        if hasattr(register_cb, 'polling_timer'):
+            register_cb.polling_timer.cancel()
+            delattr(register_cb, 'polling_timer')
+            print("已停止电机数据轮询定时器")
+
+        client.unregister_callback()
         info_status.set_text(f'CAN BUS: Not enabled')
         info_status.style('color: #fc0320; font-weight: bold')
 

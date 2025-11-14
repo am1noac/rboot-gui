@@ -21,39 +21,60 @@ def create_ui():
         try:
             from udpclient import UDPClient
             from controls import controls
+            import time
 
             # 如果已有连接，先关闭
             if client_instance:
                 try:
+                    status.set_text('正在关闭旧连接...')
                     client_instance.close()
-                except:
-                    pass
-                client_instance = None
+                    time.sleep(0.5)  # 等待完全关闭
+                except Exception as e:
+                    print(f"关闭旧连接时出错: {e}")
+                finally:
+                    client_instance = None
 
-            status.set_text('连接中...')
+            status.set_text('正在连接设备...')
+            print("\n" + "="*50)
+            print("开始连接设备")
+            print(f"目标地址: 192.168.0.4:3333")
+            print("="*50 + "\n")
 
             # 创建新连接
             client_instance = UDPClient('192.168.0.4', 3333)
 
             if client_instance.connect():
+                # 启动接收线程
                 client_instance.start_receive_thread()
-                status.set_text('已连接!')
+                time.sleep(0.3)  # 等待接收线程启动
+
+                status.set_text('✓ 已连接到设备!')
 
                 # 显示控制界面
                 container.clear()
                 with container:
                     controls(client_instance)
 
-                ui.notify('设备连接成功!')
+                ui.notify('设备连接成功! 请点击"连接CAN总线"按钮', type='positive')
+                print("\n✓ 设备连接成功！")
+                print("提示: 请点击界面上的 '连接CAN总线' 按钮\n")
+
             else:
-                status.set_text('连接失败')
-                ui.notify('连接失败，请检查设备状态')
+                status.set_text('✗ 连接失败')
+                ui.notify('连接失败！请检查:\n1. 设备是否开机\n2. 网络线是否连接\n3. IP地址是否正确(192.168.0.4)', type='negative')
                 client_instance = None
+                print("\n✗ 连接失败！\n")
+                print("故障排除:")
+                print("1. 检查设备是否开机")
+                print("2. 检查网络线是否连接")
+                print("3. 检查IP地址是否正确 (应该是 192.168.0.4)")
+                print("4. 尝试 ping 192.168.0.4 测试网络连通性\n")
 
         except Exception as e:
-            status.set_text(f'错误: {str(e)}')
-            ui.notify(f'连接错误: {str(e)}')
+            status.set_text(f'✗ 错误: {str(e)}')
+            ui.notify(f'连接错误: {str(e)}', type='negative')
             client_instance = None
+            print(f"\n✗ 连接错误: {e}\n")
 
     def disconnect_device():
         global client_instance
