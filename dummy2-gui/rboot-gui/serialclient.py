@@ -23,7 +23,7 @@ class SerialClient:
         self.last_connect_time = 0
         self.connect_interval = 2.0  # 最小连接间隔
         self.last_send_time = 0  # 上次发送时间
-        self.min_send_interval = 0.01  # 最小发送间隔10ms
+        self.min_send_interval = 0.05  # 最小发送间隔50ms (从10ms增加到50ms)
 
     def connect(self):
         """连接串口"""
