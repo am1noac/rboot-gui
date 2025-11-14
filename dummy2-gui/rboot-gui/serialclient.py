@@ -24,8 +24,9 @@ class SerialClient:
         self.connect_interval = 2.0  # 最小连接间隔
         self.last_send_time = 0  # 上次发送时间
         # 根据波特率自动调整发送间隔
+        # 9600波特率下，传输12字节需要约12.5ms，加上机械臂处理时间，需要更长间隔
         if baudrate <= 9600:
-            self.min_send_interval = 0.15  # 9600波特率使用150ms间隔
+            self.min_send_interval = 0.2  # 9600波特率使用200ms间隔（从150ms增加，更保守）
         elif baudrate <= 19200:
             self.min_send_interval = 0.1   # 19200波特率使用100ms间隔
         elif baudrate <= 57600:
@@ -33,6 +34,7 @@ class SerialClient:
         else:
             self.min_send_interval = 0.02  # 115200及以上使用20ms间隔
         print(f"设置发送间隔: {self.min_send_interval*1000:.0f}ms (波特率: {baudrate})")
+        print(f"理论最大发送速率: {1/self.min_send_interval:.1f}条/秒")
 
     def connect(self):
         """连接串口"""
