@@ -101,8 +101,9 @@ joint_angle_tmp = {'J1': 0.0, 'J2': 0.0, 'J3': 0.0, 'J4': 0.0, 'J5': 0.0, 'J6': 
 joint_angle_lock = threading.Lock()
 joint_json = 'jason.json'
 
-teaching = []    
-count = 0    
+teaching = []
+count = 0
+teaching_mode_enabled = False  # 全局示教模式标志
 
 buffer = []
 
@@ -314,16 +315,52 @@ def controls(client) -> None:
 
     steps_container = ui.column()
 
+    def enable_teaching_mode():
+        """启用拖动示教模式 - 将所有电机设为IDLE"""
+        global teaching_mode_enabled
+        teaching_mode_enabled = True
+        # 将所有6个电机设为IDLE状态，允许手动拖动
+        send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], 0)
+        ui.notify('示教模式已启用 - 现在可以手动拖动机械臂', type='positive')
+        teaching_status.set_text('示教模式: 已启用 ✓')
+        teaching_status.style('color: #03fc1c; font-weight: bold')
+
+    def disable_teaching_mode():
+        """禁用拖动示教模式 - 将电机恢复到闭环控制"""
+        global teaching_mode_enabled
+        teaching_mode_enabled = False
+        # 将所有6个电机恢复到闭环控制模式
+        send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['CLOSED_LOOP_CONTROL'], 0)
+        ui.notify('示教模式已禁用 - 电机已恢复闭环控制', type='warning')
+        teaching_status.set_text('示教模式: 已禁用')
+        teaching_status.style('color: #fc0320; font-weight: bold')
+
     def add_angles():
-        # joint_angles.append(joint_angle_tmp)
+        """记录当前位置 - 手动添加当前关节角度到轨迹"""
         with joint_angle_lock:
             new_joint_angle = joint_angle_tmp.copy()
             can_data.joint_angles.append(new_joint_angle)
+        ui.notify(f'已记录位置点 #{len(can_data.joint_angles)}', type='positive')
         update_list()
 
     def remove_contact():
+        """删除最后一个位置点"""
         with joint_angle_lock:
-            can_data.joint_angles.pop()
+            if len(can_data.joint_angles) > 0:
+                can_data.joint_angles.pop()
+                ui.notify('已删除最后一个位置点', type='warning')
+            else:
+                ui.notify('没有可删除的位置点', type='negative')
+        update_list()
+
+    def clear_all_points():
+        """清空所有轨迹点"""
+        with joint_angle_lock:
+            points_count = len(can_data.joint_angles)
+            can_data.joint_angles.clear()
+            # 保留至少一个初始点
+            can_data.joint_angles.append({'J1': 0.0, 'J2': 0.0, 'J3': 0.0, 'J4': 0.0, 'J5': 0.0, 'J6': 0.0, 'Delay': 1.5, 'Gripper': 0, 'Torque': 0.0})
+        ui.notify(f'已清空 {points_count} 个轨迹点', type='info')
         update_list()
 
     def send_steps_thread(d, r):
@@ -371,21 +408,37 @@ def controls(client) -> None:
         else:
             send_torque(7, 1, tmp_angle['Torque'])    
             ui.notify(f'Gripper has been closed {tmp_angle["Torque"]}')            
+    # 创建示教状态标签（需要在函数外部以便被引用）
+    teaching_status = ui.label('示教模式: 已禁用')
+    teaching_status.style('color: #fc0320; font-weight: bold')
+    teaching_status.set_visibility(False)  # 初始隐藏，只在Teaching模式显示
+
     def update_list():
             steps_container.clear()
             with steps_container:
                 with ui.card().bind_visibility_from(mode, 'value', value=2):
                     with ui.list().props('bordered separator'):
                         with ui.column():
+                            # 示教模式控制区域
+                            with ui.row().classes('w-full items-center'):
+                                teaching_status.set_visibility(True)
+                                ui.button('启用示教', on_click=enable_teaching_mode).props('icon=pan_tool color=positive')
+                                ui.button('禁用示教', on_click=disable_teaching_mode).props('icon=cancel color=warning')
+                                ui.button('记录位置', on_click=add_angles).props('icon=add_location_alt color=primary')
+                            ui.separator()
+
+                            # 轨迹控制区域
+                            with ui.row().classes('w-full items-center'):
+                                ui.label(f'轨迹点数量: {len(can_data.joint_angles)}').classes('text-h6')
                             with ui.row().classes('w-full'):
-                                d = ui.number('Step delays(s)', format='%.3f', value=1.5) 
-                                r = ui.number('Repeat times', format='%d', value=1) 
+                                d = ui.number('延迟时间(s)', format='%.3f', value=1.5).props('dense')
+                                r = ui.number('重复次数', format='%d', value=1).props('dense')
                                 def send_delay_l(): repeat_steps(d.value, r.value)
-                                ui.button('Add', on_click=add_angles)
-                                ui.button('Delete', on_click=remove_contact)
-                                ui.button('Repeat', on_click=send_delay_l)
-                                ui.button('Save', on_click=pick_file)
-                                ui.button('Open', on_click=open_file)
+                                ui.button('删除末点', on_click=remove_contact).props('icon=delete color=negative')
+                                ui.button('清空全部', on_click=clear_all_points).props('icon=delete_sweep color=negative')
+                                ui.button('重放轨迹', on_click=send_delay_l).props('icon=repeat color=primary')
+                                ui.button('保存', on_click=pick_file).props('icon=save color=positive')
+                                ui.button('打开', on_click=open_file).props('icon=folder_open')
                             ui.separator()
                         with ui.column():
                             with ui.row().classes('w-full'):
