@@ -123,6 +123,22 @@ class UDPClient:
             self.receive_thread.start()
             print("接收线程已启动")
 
+    def register_callback(self, callback):
+        """注册回调函数并启动接收线程"""
+        self.callback = callback
+        self._stop_receive = False
+        self.start_receive_thread()
+        print("回调已注册，接收线程已启动")
+
+    def unregister_callback(self):
+        """注销回调函数并停止接收线程"""
+        print("注销回调")
+        self._stop_receive = True
+        self.callback = None
+        if self.receive_thread:
+            self.receive_thread.join(timeout=1.0)
+        print("回调已注销，接收线程已停止")
+
     def close(self):
         """关闭连接"""
         print("关闭连接")
