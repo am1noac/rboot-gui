@@ -79,4 +79,4 @@ def create_ui():
 
 if __name__ == "__main__":
     create_ui()
-    ui.run(title='Rboot GUI', reload=False, host='127.0.0.1', port=8080, show=True)
+    ui.run(title='Rboot GUI', reload=False, host='127.0.0.1', port=8081, show=True)
