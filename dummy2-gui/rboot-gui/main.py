@@ -125,9 +125,20 @@ def create_ui():
         scan_running = True
         ip = ip_input.value
 
-        # 定义要扫描的端口
-        ports_to_scan = [3333, 4444, 5000, 6000, 7000, 8080, 9000, 10000,
-                        502, 1883, 2404, 3000, 4000, 5555, 6666, 8888, 9999]
+        # 定义要扫描的端口 - 扩展版本，覆盖更多范围
+        common_ports = [3333, 4444, 5000, 6000, 7000, 8080, 9000, 10000,
+                       502, 1883, 2404, 3000, 4000, 5555, 6666, 8888, 9999]
+
+        # 添加更多可能的端口范围
+        extended_ports = list(range(1024, 1100)) + list(range(2000, 2100)) + \
+                        list(range(3000, 3100)) + list(range(4000, 4100)) + \
+                        list(range(5000, 5100)) + list(range(6000, 6100)) + \
+                        list(range(7000, 7050)) + list(range(8000, 8100)) + \
+                        list(range(9000, 9100)) + list(range(10000, 10100))
+
+        # 根据是否按住Shift键决定扫描范围
+        # 默认快速扫描，深度扫描需要用户确认
+        ports_to_scan = common_ports  # 默认只扫描常用端口
 
         scan_result_container.clear()
 
@@ -264,13 +275,154 @@ def create_ui():
                 ui.markdown('连接已断开')
             ui.notify('设备已断开')
 
+    def deep_scan_ports():
+        """深度扫描 - 扫描更广泛的端口范围"""
+        async def confirm_and_scan():
+            result = await ui.run_javascript('''
+                return confirm("深度扫描将测试约850个端口，可能需要1-2分钟。\\n\\n是否继续？");
+            ''')
+            if result:
+                # 修改ports_to_scan为extended
+                auto_scan_ports_extended()
+
+        confirm_and_scan()
+
+    def auto_scan_ports_extended():
+        """扩展范围扫描"""
+        global scan_running
+
+        if scan_running:
+            ui.notify('扫描正在进行中...', type='warning')
+            return
+
+        scan_running = True
+        ip = ip_input.value
+
+        # 使用扩展端口列表
+        common_ports = [3333, 4444, 5000, 6000, 7000, 8080, 9000, 10000,
+                       502, 1883, 2404, 3000, 4000, 5555, 6666, 8888, 9999]
+        extended_ports = list(range(1024, 1100)) + list(range(2000, 2100)) + \
+                        list(range(3000, 3100)) + list(range(4000, 4100)) + \
+                        list(range(5000, 5100)) + list(range(6000, 6100)) + \
+                        list(range(7000, 7050)) + list(range(8000, 8100)) + \
+                        list(range(9000, 9100)) + list(range(10000, 10100))
+
+        ports_to_scan = sorted(set(common_ports + extended_ports))
+
+        scan_result_container.clear()
+
+        with scan_result_container:
+            with ui.card().classes('w-full'):
+                ui.label('深度端口扫描').classes('text-h6')
+                progress_label = ui.label(f'准备扫描 {len(ports_to_scan)} 个端口...')
+                progress_bar = ui.linear_progress(value=0).props('instant-feedback')
+                result_card = ui.card().classes('w-full mt-4')
+
+        def scan_thread():
+            global scan_running
+            responded = []
+            timeout_ports = []
+            rejected = []
+
+            for i, port in enumerate(ports_to_scan):
+                progress = (i + 1) / len(ports_to_scan)
+                progress_bar.set_value(progress)
+                progress_label.set_text(f'扫描中... [{i+1}/{len(ports_to_scan)}] 测试端口 {port}')
+
+                result = scan_single_port(ip, port, timeout=1.0)  # 缩短超时时间
+
+                if result['received']:
+                    responded.append((port, result['response_data']))
+                elif result['error'] == 'timeout':
+                    timeout_ports.append(port)
+                elif result['error'] == 'os_error' and result['error_code'] in (10054, 10040):
+                    rejected.append(port)
+
+                time.sleep(0.05)  # 更短的延迟
+
+            # 显示结果
+            scan_running = False
+            progress_label.set_text('✅ 深度扫描完成！')
+
+            with result_card:
+                ui.label('扫描结果').classes('text-h6')
+
+                if responded:
+                    ui.markdown('### ✅ 收到响应的端口（推荐使用）:').classes('text-positive')
+                    for port, data in responded:
+                        with ui.row():
+                            ui.label(f'端口 {port}:').classes('font-bold')
+                            ui.label(data[:50] + '...' if len(data) > 50 else data).classes('text-caption')
+                            ui.button('使用此端口', on_click=lambda p=port: [
+                                port_input.set_value(p),
+                                ui.notify(f'已设置端口为 {p}，请点击"连接设备"', type='positive')
+                            ]).props('dense color=positive')
+
+                if timeout_ports:
+                    ui.markdown('### ⏱️ 超时的端口（可能需要尝试）:').classes('text-warning')
+                    with ui.row().classes('flex-wrap'):
+                        for port in timeout_ports[:20]:
+                            ui.button(str(port), on_click=lambda p=port: [
+                                port_input.set_value(p),
+                                ui.notify(f'已设置端口为 {p}，请点击"连接设备"测试', type='info')
+                            ]).props('dense flat size=sm')
+                    if len(timeout_ports) > 20:
+                        ui.label(f'还有 {len(timeout_ports) - 20} 个超时端口...').classes('text-caption')
+
+                if not responded and not timeout_ports:
+                    ui.markdown('### ❌ 未找到有效端口').classes('text-negative')
+                    ui.markdown('''
+**可能的原因：**
+1. ❌ IP地址不正确 - 请确认设备IP是否为 ''' + ip + '''
+2. ❌ 设备未开机或未联网
+3. ❌ 设备使用的不是UDP协议（可能是TCP或串口转网络）
+4. ❌ 设备需要特殊的认证或初始化序列
+5. ❌ 防火墙阻止了通信
+
+**下一步建议：**
+1. 使用Wireshark抓包，查看设备与其他软件的通信
+2. 检查设备是否有配置界面或显示屏显示端口号
+3. 查找设备的用户手册或技术文档
+4. 尝试ping设备确认网络连通性
+                    ''').classes('text-caption bg-red-50 p-3 rounded')
+
+                if rejected:
+                    with ui.expansion(f'被拒绝的端口 ({len(rejected)}个)', icon='block').classes('w-full'):
+                        ui.label(', '.join(map(str, rejected[:50]))).classes('text-caption')
+                        if len(rejected) > 50:
+                            ui.label(f'...还有 {len(rejected) - 50} 个').classes('text-caption')
+
+        Thread(target=scan_thread, daemon=True).start()
+        ui.notify(f'开始深度扫描 {ip}...', type='info')
+
+    def test_ping():
+        """测试设备连通性"""
+        ip = ip_input.value
+        import subprocess
+        import platform
+
+        try:
+            param = '-n' if platform.system().lower() == 'windows' else '-c'
+            command = ['ping', param, '1', ip]
+            result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+
+            if result.returncode == 0:
+                ui.notify(f'✅ Ping {ip} 成功 - 设备网络可达', type='positive')
+            else:
+                ui.notify(f'❌ Ping {ip} 失败 - 请检查IP地址和网络', type='negative')
+        except Exception as e:
+            ui.notify(f'Ping测试错误: {str(e)}', type='warning')
+
     # 连接管理按钮
     with ui.row():
         ui.button('连接设备', on_click=connect_device, icon='link')
         ui.button('断开连接', on_click=disconnect_device, icon='link_off')
         ui.button('重新连接', on_click=lambda: [disconnect_device(), connect_device()], icon='refresh')
-        ui.separator().props('vertical')
-        ui.button('🔍 自动扫描端口', on_click=auto_scan_ports, color='orange').props('outline')
+
+    with ui.row():
+        ui.button('🔍 快速扫描', on_click=auto_scan_ports, color='orange').props('outline')
+        ui.button('🔍🔍 深度扫描', on_click=deep_scan_ports, color='deep-orange').props('outline')
+        ui.button('📡 Ping测试', on_click=test_ping, color='blue-grey').props('flat')
 
     # 初始内容
     with container:
