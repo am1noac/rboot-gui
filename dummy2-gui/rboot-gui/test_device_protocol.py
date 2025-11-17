@@ -27,7 +27,11 @@ def test_protocol(port, baudrate):
         ser.reset_input_buffer()
         ser.reset_output_buffer()
 
-        print(f"✓ 串口打开成功")
+        # 设置DTR和RTS信号（有些设备需要这些信号才能通信）
+        ser.dtr = True
+        ser.rts = True
+
+        print(f"✓ 串口打开成功 (DTR=True, RTS=True)")
 
         # 测试1: CAN协议命令 (查询电机1)
         print(f"\n[测试1] 发送CAN协议命令...")

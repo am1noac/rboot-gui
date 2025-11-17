@@ -142,6 +142,12 @@ class SerialClient:
             # 清空缓冲区
             self.serial_conn.reset_input_buffer()
             self.serial_conn.reset_output_buffer()
+
+            # 设置DTR和RTS信号（有些设备需要这些信号才能通信）
+            self.serial_conn.dtr = True
+            self.serial_conn.rts = True
+            print(f"  DTR=True, RTS=True")
+
             time.sleep(0.1)
 
             self.connected = True
