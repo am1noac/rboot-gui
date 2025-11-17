@@ -187,10 +187,12 @@ def controls(client) -> None:
         """定时请求所有电机的位置数据"""
         try:
             for i in range(1, 7):  # 请求6个电机的位置
-                client.send_message(i, can_data.command_id['Get_Encoder_Estimates'],
+                success = client.send_message(i, can_data.command_id['Get_Encoder_Estimates'],
                                   struct.pack('<I', 0), struct.pack('<I', 0),
                                   can_data.Message_type['short'])
-                time.sleep(0.01)  # 每个请求间隔10ms
+                if not success:
+                    print(f"⚠️ 电机{i}位置查询失败，跳过")
+                time.sleep(0.1)  # 增加到100ms间隔，给设备足够时间处理
         except Exception as e:
             print(f"❌ 请求位置数据失败: {e}")
 
@@ -217,11 +219,12 @@ def controls(client) -> None:
         def delayed_start_timer():
             nonlocal position_timer
             print("\n开始主动查询模式...")
-            # 启动定时器，每200ms请求一次位置数据
+            # 启动定时器，每1秒请求一次位置数据（慢速模式，避免设备过载）
             if position_timer:
                 position_timer.cancel()
-            position_timer = ui.timer(0.2, request_all_positions)
-            print(f"✓ 定时查询已启动 (200ms间隔)")
+            position_timer = ui.timer(1.0, request_all_positions)
+            print(f"✓ 定时查询已启动 (1秒间隔，慢速模式)")
+            print(f"提示: 每次查询6个电机需要约0.6秒")
 
         # 10秒后启动定时查询
         ui.timer(10.0, delayed_start_timer, once=True)
