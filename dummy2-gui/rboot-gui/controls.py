@@ -190,19 +190,39 @@ def controls(client) -> None:
                 client.send_message(i, can_data.command_id['Get_Encoder_Estimates'],
                                   struct.pack('<I', 0), struct.pack('<I', 0),
                                   can_data.Message_type['short'])
+                time.sleep(0.01)  # 每个请求间隔10ms
         except Exception as e:
-            print(f"请求位置数据失败: {e}")
+            print(f"❌ 请求位置数据失败: {e}")
 
     def register_cb():
         nonlocal position_timer
+        print("\n" + "="*50)
+        print("回调已注册")
+        print("正在初始化CAN总线...")
+
         client.register_callback(udp_callback)
         info_status.set_text(f'CAN BUS: Enabled')
         info_status.style('color: #03fc1c; font-weight: bold')
 
-        # 启动定时器，每50ms请求一次位置数据
+        # 先发送心跳，让设备知道我们在线
+        print("发送心跳注册...")
+        for i in range(1, 7):
+            send_msg(i, can_data.command_id['Heartbeat'], 0, 0)
+            time.sleep(0.01)
+
+        # 启动定时器，每200ms请求一次位置数据（降低频率避免设备过载）
         if position_timer:
             position_timer.cancel()
-        position_timer = ui.timer(0.05, request_all_positions)
+        position_timer = ui.timer(0.2, request_all_positions)
+
+        print(f"✓ CAN总线已连接")
+        print(f"✓ 定时器已启动 (200ms间隔)")
+        print(f"提示: 如果没有收到数据，请检查：")
+        print(f"  1. 设备IP和端口是否正确")
+        print(f"  2. 设备是否已开机并连接到网络")
+        print(f"  3. 防火墙是否阻止了UDP通信")
+        print("="*50 + "\n")
+
         ui.notify('CAN总线已连接，开始接收数据', type='positive')
 
     def unregister_cb():

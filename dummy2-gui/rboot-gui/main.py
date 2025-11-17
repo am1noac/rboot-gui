@@ -15,6 +15,13 @@ def create_ui():
     status = ui.label('状态: 准备连接')
     container = ui.column()
 
+    # 连接配置输入框
+    with ui.card().classes('w-full'):
+        ui.markdown('### 设备连接配置')
+        with ui.row():
+            ip_input = ui.input('设备IP地址', value='192.168.0.88', placeholder='192.168.0.88')
+            port_input = ui.number('端口', value=9999, format='%d', min=1, max=65535)
+
     def connect_device():
         global client_instance
 
@@ -32,12 +39,25 @@ def create_ui():
 
             status.set_text('连接中...')
 
+            # 使用用户输入的IP和端口
+            target_ip = ip_input.value
+            target_port = int(port_input.value)
+
+            print("="*50)
+            print("开始连接设备")
+            print(f"连接模式: UDP网络")
+            print(f"目标地址: {target_ip}:{target_port}")
+            print("="*50)
+
             # 创建新连接
-            client_instance = UDPClient('192.168.0.4', 3333)
+            client_instance = UDPClient(target_ip, target_port)
 
             if client_instance.connect():
                 client_instance.start_receive_thread()
                 status.set_text('已连接!')
+
+                print("\n✓ 设备连接成功！")
+                print("提示: 请点击界面上的 '连接CAN总线' 按钮\n")
 
                 # 显示控制界面
                 container.clear()

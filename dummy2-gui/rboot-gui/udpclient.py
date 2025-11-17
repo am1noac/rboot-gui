@@ -93,27 +93,37 @@ class UDPClient:
     def receive_messages(self):
         """接收消息线程"""
         print("接收线程启动")
+        print(f"监听地址: {self.server_address}:{self.server_port}")
+        print("等待接收数据...")
+
         if not self.connected:
             return
+
+        receive_count = 0
+        timeout_count = 0
 
         while not self._stop_receive:
             try:
                 data, addr = self.client_socket.recvfrom(1024)
                 if data:
+                    receive_count += 1
                     hex_data = ' '.join(f'{b:02X}' for b in data)
-                    print(f"收到: {hex_data}")
+                    print(f"收到 #{receive_count} 来自 {addr}: {hex_data}")
 
                     if self.callback:
                         self.callback(hex_data)
 
             except socket.timeout:
+                timeout_count += 1
+                if timeout_count % 20 == 0:  # 每20次超时打印一次
+                    print(f"[调试] 等待数据中... (超时次数: {timeout_count}, 已接收: {receive_count})")
                 continue  # 超时正常
             except Exception as e:
                 if not self._stop_receive:
                     print(f"接收错误: {e}")
                     break
 
-        print("接收线程停止")
+        print(f"接收线程停止 (共接收 {receive_count} 条消息)")
 
     def start_receive_thread(self):
         """启动接收线程"""
