@@ -149,6 +149,7 @@ def text_controls(client):
 
         def update_position_display():
             """更新位置显示"""
+            print("[监控] update_position_display() 定时器触发")
             current_pos = client.get_current_position()
             if current_pos:
                 # 更新角度输入框
@@ -158,13 +159,19 @@ def text_controls(client):
                 pos_str = f"当前位置: J1={current_pos[0]:.1f}° J2={current_pos[1]:.1f}° J3={current_pos[2]:.1f}° J4={current_pos[3]:.1f}° J5={current_pos[4]:.1f}° J6={current_pos[5]:.1f}°"
                 position_display.set_text(pos_str)
                 position_display.style('color: #03fc1c; font-family: monospace; font-weight: bold')
+                print(f"[监控] 位置已更新显示")
+            else:
+                print(f"[监控] 未能获取到位置数据")
 
         def toggle_monitoring():
             """切换位置监控"""
             nonlocal position_timer, monitoring
 
+            print(f"[监控] toggle_monitoring() 被调用, 当前状态: monitoring={monitoring}")
+
             if not monitoring:
                 # 启动监控
+                print("[监控] 正在启动位置监控...")
                 position_timer = ui.timer(1.0, update_position_display)  # 每1秒更新
                 monitoring = True
                 monitor_btn.set_text('停止位置监控')
@@ -172,8 +179,10 @@ def text_controls(client):
                 teaching_status.set_text('位置监控: 已启动')
                 teaching_status.style('color: #03fc1c; font-weight: bold')
                 ui.notify('位置监控已启动，每秒自动读取位置', type='positive')
+                print("[监控] ✓ 位置监控已启动")
             else:
                 # 停止监控
+                print("[监控] 正在停止位置监控...")
                 if position_timer:
                     position_timer.cancel()
                     position_timer = None
@@ -183,6 +192,7 @@ def text_controls(client):
                 teaching_status.set_text('位置监控: 已停止')
                 teaching_status.style('color: #888; font-weight: bold')
                 ui.notify('位置监控已停止', type='info')
+                print("[监控] ✓ 位置监控已停止")
 
         def read_and_record():
             """读取当前位置并记录"""

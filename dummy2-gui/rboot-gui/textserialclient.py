@@ -227,9 +227,13 @@ class TextSerialClient:
         Returns:
             list: 6个关节角度 [J1, J2, J3, J4, J5, J6]，失败返回None
         """
+        print("[位置查询] get_current_position() 被调用")
+
         if not self.connected or self.serial_conn is None:
             print("✗ 未连接，无法获取位置")
             return None
+
+        print(f"[位置查询] 串口状态: connected={self.connected}")
 
         with self.send_lock:
             try:
@@ -238,17 +242,20 @@ class TextSerialClient:
 
                 # 发送查询命令
                 command = "#GETJPOS\r\n"
-                self.serial_conn.write(command.encode('utf-8'))
+                bytes_written = self.serial_conn.write(command.encode('utf-8'))
                 self.serial_conn.flush()
 
-                print(f"✓ 发送查询命令: #GETJPOS")
+                print(f"✓ 发送查询命令: #GETJPOS ({bytes_written} 字节)")
 
                 # 等待响应
-                time.sleep(0.3)
+                time.sleep(0.5)
 
-                if self.serial_conn.in_waiting > 0:
+                waiting = self.serial_conn.in_waiting
+                print(f"[位置查询] 缓冲区有 {waiting} 字节等待读取")
+
+                if waiting > 0:
                     response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
-                    print(f"收到响应: {response}")
+                    print(f"收到响应: '{response}'")
 
                     # 解析响应: "ok J1 J2 J3 J4 J5 J6"
                     if response.startswith('ok'):
@@ -257,15 +264,20 @@ class TextSerialClient:
                             angles = [float(parts[i]) for i in range(1, 7)]
                             print(f"✓ 当前位置: {angles}")
                             return angles
+                        else:
+                            print(f"✗ 响应格式错误: 期望7个部分，收到{len(parts)}个")
+                            return None
                     else:
                         print(f"✗ 无法解析响应: {response}")
                         return None
                 else:
-                    print("✗ 没有收到响应")
+                    print("✗ 没有收到响应 (超时或设备无响应)")
                     return None
 
             except Exception as e:
-                print(f"✗ 获取位置失败: {e}")
+                print(f"✗ 获取位置失败: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
                 return None
 
     def send_position(self, angles):
