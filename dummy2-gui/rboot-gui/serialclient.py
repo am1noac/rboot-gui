@@ -105,21 +105,39 @@ class SerialClient:
                     return False
 
             print(f"正在打开串口: {self.port} (波特率: {self.baudrate})")
-            print("调用serial.open()...")
+            print("调用serial.open()... (最多等待5秒)")
 
-            # 打开串口
-            self.serial_conn = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=1.0,  # 读取超时1秒
-                write_timeout=2.0,  # 写入超时2秒
-                xonxoff=False,
-                rtscts=False,
-                dsrdtr=False
-            )
+            # 使用线程+超时机制打开串口，防止无限阻塞
+            open_success = [False]
+            open_error = [None]
+
+            def try_open():
+                try:
+                    self.serial_conn = serial.Serial(
+                        port=self.port,
+                        baudrate=self.baudrate,
+                        bytesize=serial.EIGHTBITS,
+                        parity=serial.PARITY_NONE,
+                        stopbits=serial.STOPBITS_ONE,
+                        timeout=1.0,  # 读取超时1秒
+                        write_timeout=2.0,  # 写入超时2秒
+                        xonxoff=False,
+                        rtscts=False,
+                        dsrdtr=False
+                    )
+                    open_success[0] = True
+                except Exception as e:
+                    open_error[0] = e
+
+            open_thread = threading.Thread(target=try_open, daemon=True)
+            open_thread.start()
+            open_thread.join(timeout=5.0)  # 最多等待5秒
+
+            if not open_success[0]:
+                if open_error[0]:
+                    raise open_error[0]
+                else:
+                    raise serial.SerialException(f"打开串口{self.port}超时（5秒）- 端口可能被占用或状态异常")
 
             # 清空缓冲区
             self.serial_conn.reset_input_buffer()
