@@ -77,23 +77,30 @@ class TextSerialClient:
                     print("✗ 无法找到可用的串口")
                     return False
 
-            print(f"正在打开串口: {self.port} (波特率: {self.baudrate})")
+            # 检查端口是否存在于可用端口列表中
+            print(f"检查串口 {self.port} 是否可用...")
+            available_ports = [p.device for p in serial.tools.list_ports.comports()]
+            if self.port not in available_ports:
+                print(f"✗ 串口 {self.port} 不存在或未连接")
+                print(f"可用串口: {', '.join(available_ports) if available_ports else '无'}")
+                return False
+            print(f"✓ 串口 {self.port} 存在于系统中")
 
-            # 打开串口 - 使用文本协议的配置
+            print(f"正在打开串口: {self.port} (波特率: {self.baudrate})")
+            print("  使用简化配置（匹配PyCharm脚本）...")
+
+            # 使用简化的配置，匹配用户的工作脚本
+            # 只设置必要参数，避免驱动兼容性问题
             self.serial_conn = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=1.0,
-                write_timeout=10.0,
-                xonxoff=False,
-                rtscts=False,
-                dsrdtr=False
+                timeout=1.0
             )
 
+            print("✓ 串口已打开")
+
             # 清空缓冲区
+            print("  清空缓冲区...")
             self.serial_conn.reset_input_buffer()
             self.serial_conn.reset_output_buffer()
             time.sleep(0.2)
@@ -112,8 +119,22 @@ class TextSerialClient:
 
             return True
 
+        except serial.SerialException as e:
+            print(f"✗ 串口错误: {e}")
+            print(f"\n可能原因：")
+            print(f"  1. 端口 {self.port} 已被其他程序占用")
+            print(f"  2. USB设备未正确连接")
+            print(f"  3. 缺少串口驱动程序")
+            print(f"\n建议：")
+            print(f"  - 关闭其他可能使用该串口的程序（Arduino IDE、串口调试助手等）")
+            print(f"  - 运行 reset_port.py 工具尝试释放端口")
+            print(f"  - 重新插拔USB线")
+            self.connected = False
+            return False
         except Exception as e:
-            print(f"✗ 串口连接失败: {e}")
+            print(f"✗ 未知错误: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             self.connected = False
             return False
 
