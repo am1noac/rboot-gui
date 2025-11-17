@@ -179,7 +179,9 @@ def controls(client) -> None:
          update(data)
     
     def register_cb():
-        client.register_callback(udp_callback) 
+        client.register_callback(udp_callback)
+        # 确保接收线程正在运行
+        client.start_receive_thread()
         send_msg(1, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], can_data.Message_type['short'])        
 
     def unregister_cb():

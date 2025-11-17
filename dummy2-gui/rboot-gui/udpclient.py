@@ -28,6 +28,9 @@ class UDPClient:
             # 关闭旧连接
             self.close()
 
+            # 重置接收线程标志，允许新的接收线程启动
+            self._stop_receive = False
+
             # 创建新socket
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
