@@ -19,20 +19,45 @@ container = ui.row()
 
 def check_devices() -> None:
     """定期检查设备连接状态"""
-    for device in odrive.connected_devices:
-        if device.serial_number not in devices:
-            print(f'Adding Rdrive {device.serial_number:x}')
-            with container:
-                with ui.column() as devices[device.serial_number]:
-                    controls(device)
-    for serial_number in list(devices):
-        if not any(d.serial_number == serial_number for d in odrive.connected_devices):
-            print(f'Removing Rdrive {serial_number:x}')
-            container.remove(devices.pop(serial_number))
+    try:
+        # 尝试查找新连接的设备
+        found_devices = []
+        try:
+            # 方法1: 使用find_any查找设备
+            device = odrive.find_any(timeout=0.5)
+            if device:
+                found_devices.append(device)
+        except:
+            pass
+
+        # 添加新设备到界面
+        for device in found_devices:
+            if hasattr(device, 'serial_number'):
+                serial = device.serial_number
+                if serial not in devices:
+                    print(f'Adding Rdrive {serial:x}')
+                    with container:
+                        with ui.column() as devices[serial]:
+                            controls(device)
+
+        # 移除断开连接的设备
+        for serial_number in list(devices):
+            # 检查设备是否仍然连接
+            still_connected = False
+            for device in found_devices:
+                if hasattr(device, 'serial_number') and device.serial_number == serial_number:
+                    still_connected = True
+                    break
+
+            if not still_connected:
+                print(f'Removing Rdrive {serial_number:x}')
+                container.remove(devices.pop(serial_number))
+    except Exception as e:
+        print(f'Device discovery error: {e}')
 
 # 启动设备发现
 print("Starting ODrive device discovery...")
-odrive.start_discovery(odrive.default_usb_search_path)
+print("Waiting for ODrive devices to be connected via USB...")
 
 # 使用定时器定期检查设备（每1秒检查一次）
 ui.timer(1.0, check_devices)
