@@ -278,7 +278,11 @@ class SerialClient:
                     data = self.serial_conn.read(self.serial_conn.in_waiting)
                     if data:
                         if not first_data_received:
+                            hex_preview = ' '.join(f'{b:02X}' for b in data[:min(32, len(data))])
+                            ascii_preview = ''.join(chr(b) if 32 <= b < 127 else '.' for b in data[:min(32, len(data))])
                             print(f"✓ 首次收到数据: {len(data)} 字节")
+                            print(f"  HEX: {hex_preview}")
+                            print(f"  ASCII: {ascii_preview}")
                             first_data_received = True
 
                         buffer.extend(data)
