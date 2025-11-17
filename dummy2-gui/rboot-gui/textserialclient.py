@@ -86,8 +86,16 @@ class TextSerialClient:
                 return False
             print(f"✓ 串口 {self.port} 存在于系统中")
 
+            # 额外等待，确保之前的连接完全释放
+            print(f"等待端口完全释放...")
+            time.sleep(1.0)
+
             print(f"正在打开串口: {self.port} (波特率: {self.baudrate})")
             print("  使用简化配置（匹配PyCharm脚本）...")
+            print("  ⚠️ 如果这里卡住超过5秒，说明端口被占用")
+            print("     请按 Ctrl+C 中止，然后:")
+            print("     1. 关闭所有串口调试工具")
+            print("     2. 运行 quick_serial_test.py 诊断问题")
 
             # 使用简化的配置，匹配用户的工作脚本
             # 只设置必要参数，避免驱动兼容性问题
