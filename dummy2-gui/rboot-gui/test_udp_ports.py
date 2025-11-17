@@ -24,8 +24,9 @@ def test_udp_port(host, port, timeout=2):
         local_port = sock.getsockname()[1]
         print(f"本地端口: {local_port}")
 
-        # 发送正确格式的CAN命令（带0xCC尾部，参考dummy2-gui/main.py）
-        can_cmd = bytearray([0xBB, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCC])
+        # 发送正确的初始化命令（参考dummy2-gui/main.py的"disable"命令）
+        # message[1]=0x02, message[2]=0x0c, message[3]=50, message[7]=20, message[9]=0
+        can_cmd = bytearray([0xBB, 0x02, 0x0C, 50, 0x00, 0x00, 0x00, 20, 0x00, 0x00, 0x00, 0xCC])
         hex_str = ' '.join(f'{b:02X}' for b in can_cmd)
 
         print(f"发送命令: {hex_str}")
@@ -69,7 +70,7 @@ def main():
     ]
 
     print(f"\n目标设备: {host}")
-    print(f"测试CAN协议命令: BB 01 09 ... (查询电机1)\n")
+    print(f"测试CAN初始化命令: BB 02 0C ... (disable命令)\n")
 
     results = {}
 
