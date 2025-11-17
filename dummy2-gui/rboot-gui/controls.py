@@ -210,20 +210,31 @@ def controls(client) -> None:
             send_msg(i, can_data.command_id['Heartbeat'], 0, 0)
             time.sleep(0.01)
 
-        # 启动定时器，每200ms请求一次位置数据（降低频率避免设备过载）
-        if position_timer:
-            position_timer.cancel()
-        position_timer = ui.timer(0.2, request_all_positions)
+        print("\n⏳ 等待10秒，检测设备是否主动推送数据...")
+        print("(如果设备使用推送模式，应该会自动收到数据)\n")
+
+        # 延迟启动定时器，先等待10秒看设备是否主动发送
+        def delayed_start_timer():
+            nonlocal position_timer
+            print("\n开始主动查询模式...")
+            # 启动定时器，每200ms请求一次位置数据
+            if position_timer:
+                position_timer.cancel()
+            position_timer = ui.timer(0.2, request_all_positions)
+            print(f"✓ 定时查询已启动 (200ms间隔)")
+
+        # 10秒后启动定时查询
+        ui.timer(10.0, delayed_start_timer, once=True)
 
         print(f"✓ CAN总线已连接")
-        print(f"✓ 定时器已启动 (200ms间隔)")
         print(f"提示: 如果没有收到数据，请检查：")
-        print(f"  1. 设备IP和端口是否正确")
+        print(f"  1. 设备IP和端口是否正确 (当前: {client.server_address}:{client.server_port})")
         print(f"  2. 设备是否已开机并连接到网络")
         print(f"  3. 防火墙是否阻止了UDP通信")
+        print(f"  4. 尝试先设置电机为IDLE模式（点击右侧按钮）")
         print("="*50 + "\n")
 
-        ui.notify('CAN总线已连接，开始接收数据', type='positive')
+        ui.notify('CAN总线已连接，正在检测通信模式...', type='positive')
 
     def unregister_cb():
         nonlocal position_timer
