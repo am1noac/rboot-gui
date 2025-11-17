@@ -28,11 +28,19 @@ def text_controls(client):
     with ui.card().classes('w-full'):
         ui.markdown('### 设备控制')
 
+        def init_device():
+            """初始化设备 - 发送 !START + !HOME"""
+            if client.initialize_device():
+                ui.notify('✓ 设备初始化完成 (!START + !HOME)', type='positive')
+                status_label.set_text('状态: 已初始化 - 电机使能，可接收命令')
+                status_label.style('color: #03fc1c; font-weight: bold')
+            else:
+                ui.notify('初始化失败', type='negative')
+
         def send_home():
             """发送HOME命令"""
             if client.send_text_command("!HOME"):
                 ui.notify('已发送 !HOME 命令', type='info')
-                status_label.set_text('状态: HOME - 机械臂展开')
             else:
                 ui.notify('发送失败', type='negative')
 
@@ -40,7 +48,6 @@ def text_controls(client):
             """发送START命令"""
             if client.send_text_command("!START"):
                 ui.notify('已发送 !START 命令 - 机械臂已使能', type='positive')
-                status_label.set_text('状态: 已使能 - 可以接收位置命令')
             else:
                 ui.notify('发送失败', type='negative')
 
@@ -57,10 +64,12 @@ def text_controls(client):
                 ui.notify('发送失败', type='negative')
 
         with ui.row().classes('w-full'):
-            ui.button('发送 !HOME', on_click=send_home, icon='home') \
-                .tooltip('展开机械臂（可能取消使能）')
+            ui.button('初始化设备', on_click=init_device, icon='play_circle', color='primary') \
+                .tooltip('发送 !START + !HOME (使能并展开)')
             ui.button('发送 !START', on_click=send_start, icon='play_arrow') \
                 .tooltip('使能机械臂（电机锁定）')
+            ui.button('发送 !HOME', on_click=send_home, icon='home') \
+                .tooltip('展开机械臂')
 
         with ui.row().classes('w-full'):
             custom_input = ui.input('自定义命令', placeholder='例如: !STOP').classes('flex-grow')
@@ -105,37 +114,24 @@ def text_controls(client):
 
     # 示教功能
     with ui.card().classes('w-full'):
-        ui.markdown('### 示教模式（自动记录）')
+        ui.markdown('### 示教模式（位置记录）')
 
-        teaching_status = ui.label('示教模式: 未启用')
-        teaching_status.style('color: #fc0320; font-weight: bold')
+        teaching_status = ui.label('提示: 设备上电后默认可以手动移动')
+        teaching_status.style('color: #888; font-weight: bold')
 
         ui.markdown('''
-**使用说明：**
-1. 点击"启用示教模式"（发送 !DISABLE 失能电机）
-2. 手动移动机械臂到目标位置
-3. 点击"读取并记录位置"（自动发送 #GETJPOS 读取）
-4. 重复步骤 2-3 记录多个位置
-5. 点击"播放动作序列"执行
+**示教流程：**
+1. **确保未发送初始化命令**（选择"手动模式"连接）
+2. 此时机械臂处于上电默认状态，可以手动移动
+3. **手动移动**机械臂到目标位置
+4. 点击"读取并记录位置"（发送 #GETJPOS 自动读取）
+5. 重复步骤 3-4 记录多个位置
+6. 记录完成后，点击"初始化设备"按钮使能电机
+7. 点击"播放动作序列"执行录制的动作
+
+**注意：** 此设备不支持 !DISABLE 命令，无法在使能后再失能。
+因此必须在连接时选择"手动模式"以保持可移动状态。
         ''')
-
-        def enable_teaching():
-            """启用示教模式 - 失能电机"""
-            if client.disable_motors():  # 发送 !DISABLE
-                teaching_status.set_text('示教模式: 已启用 - 可以手动移动机械臂')
-                teaching_status.style('color: #03fc1c; font-weight: bold')
-                ui.notify('示教模式已启用！现在可以手动移动机械臂', type='positive')
-            else:
-                ui.notify('启用失败', type='negative')
-
-        def disable_teaching():
-            """禁用示教模式 - 重新使能电机"""
-            if client.send_text_command("!START"):
-                teaching_status.set_text('示教模式: 未启用')
-                teaching_status.style('color: #fc0320; font-weight: bold')
-                ui.notify('示教模式已禁用，电机已使能', type='warning')
-            else:
-                ui.notify('禁用失败', type='negative')
 
         def read_and_record():
             """读取当前位置并记录"""
@@ -149,15 +145,13 @@ def text_controls(client):
                 # 记录位置
                 teaching_positions.append(current_pos.copy())
                 ui.notify(f'✓ 已记录位置 #{len(teaching_positions)}: J1={current_pos[0]:.1f}°, J2={current_pos[1]:.1f}°, J3={current_pos[2]:.1f}°', type='positive')
+                teaching_status.set_text(f'已记录 {len(teaching_positions)} 个位置')
+                teaching_status.style('color: #03fc1c; font-weight: bold')
                 update_positions_list()
             else:
                 ui.notify('读取位置失败', type='negative')
 
         with ui.row().classes('w-full'):
-            ui.button('启用示教模式', on_click=enable_teaching, icon='pan_tool', color='positive') \
-                .tooltip('发送 !DISABLE - 失能电机，可手动移动')
-            ui.button('禁用示教模式', on_click=disable_teaching, icon='lock', color='warning') \
-                .tooltip('发送 !START - 重新使能电机')
             ui.button('读取并记录位置', on_click=read_and_record, icon='add_location', color='primary') \
                 .tooltip('发送 #GETJPOS 读取当前位置并保存')
 

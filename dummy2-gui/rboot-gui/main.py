@@ -32,9 +32,9 @@ def create_ui():
         with init_mode_row:
             init_mode = ui.select(
                 label='初始化模式',
-                options=['示教模式(仅HOME,可手动移动)', '正常模式(START+HOME,电机使能)'],
-                value='示教模式(仅HOME,可手动移动)'
-            ).tooltip('示教模式: 仅发送!HOME，电机失能，可手动移动\n正常模式: 发送!START+!HOME，电机使能，无法手动移动')
+                options=['手动模式(不初始化,可示教)', '自动初始化(START+HOME,电机使能)'],
+                value='手动模式(不初始化,可示教)'
+            ).tooltip('手动模式: 连接后不发送命令，保持上电状态(可手动移动，用于示教)\n自动初始化: 连接后自动发送!START+!HOME(电机使能锁定)')
 
         # UDP配置
         udp_config = ui.row()
@@ -125,20 +125,20 @@ def create_ui():
 
                 target_port = port_select.value
                 target_baudrate = int(baudrate_input.value)
-                # 判断是否为示教模式
-                is_teaching_mode = '示教模式' in init_mode.value
+                # 判断是否自动初始化
+                should_auto_init = '自动初始化' in init_mode.value
 
                 print(f"连接模式: USB串口 (文本协议)")
                 print(f"串口: {target_port}")
                 print(f"波特率: {target_baudrate}")
                 print(f"协议: ASCII文本 (!START, &angles)")
-                print(f"初始化: {init_mode.value}")
+                print(f"初始化模式: {init_mode.value}")
                 print("="*50)
 
                 client_instance = TextSerialClient(
                     port=target_port,
                     baudrate=target_baudrate,
-                    teaching_mode=is_teaching_mode
+                    auto_init=should_auto_init
                 )
                 control_ui = text_controls
 

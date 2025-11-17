@@ -12,14 +12,14 @@ import time
 
 
 class TextSerialClient:
-    def __init__(self, port=None, baudrate=9600, teaching_mode=False):
+    def __init__(self, port=None, baudrate=9600, auto_init=False):
         """
         初始化文本串口客户端
 
         Args:
             port: 串口名称（如'COM7'），None则自动检测
             baudrate: 波特率，默认9600
-            teaching_mode: True=示教模式(仅HOME), False=正常模式(START+HOME)
+            auto_init: True=自动发送!START+!HOME初始化, False=不初始化(用于示教)
         """
         self.port = port
         self.baudrate = baudrate
@@ -32,7 +32,7 @@ class TextSerialClient:
         self.connect_interval = 0.5
         self.send_lock = threading.Lock()
         self.initialized = False  # 是否已发送START和HOME
-        self.teaching_mode = teaching_mode  # 示教模式标志
+        self.auto_init = auto_init  # 是否自动初始化
 
     def list_ports(self):
         """列出所有可用的串口"""
@@ -123,9 +123,15 @@ class TextSerialClient:
             print(f"  波特率: {self.baudrate}")
             print(f"  协议: ASCII文本命令")
 
-            # 自动发送初始化命令
-            time.sleep(0.5)
-            self.initialize_device(teaching_mode=self.teaching_mode)
+            # 根据配置决定是否自动初始化
+            if self.auto_init:
+                time.sleep(0.5)
+                print("\n自动初始化模式: 将发送 !START + !HOME")
+                self.initialize_device()
+            else:
+                print("\n手动模式: 未发送初始化命令")
+                print("提示: 设备保持上电默认状态，可以手动移动机械臂")
+                print("     需要时请在界面上手动点击初始化按钮")
 
             return True
 
@@ -148,49 +154,41 @@ class TextSerialClient:
             self.connected = False
             return False
 
-    def initialize_device(self, teaching_mode=False):
+    def initialize_device(self):
         """
-        初始化设备
+        初始化设备 - 发送 !START + !HOME
+        必须按此顺序：先START使能，再HOME展开
+        """
+        if not self.connected:
+            print("✗ 未连接，无法初始化")
+            return False
 
-        Args:
-            teaching_mode: True=示教模式(仅HOME,不使能), False=正常模式(HOME+START,使能)
-        """
-        if not self.connected or self.initialized:
-            return
+        if self.initialized:
+            print("设备已初始化")
+            return True
 
         print("\n初始化设备...")
+        print("顺序: !START (使能) → !HOME (展开)")
 
-        if teaching_mode:
-            print("【示教模式初始化】- 仅发送!HOME，保持失能状态")
-            # 示教模式：只发送 !HOME，不发送 !START
-            # 这样机械臂会展开，但电机不会使能，可以手动移动
-            if self.send_text_command("!HOME"):
-                print("✓ HOME命令已发送，等待10秒...")
-                time.sleep(10)
-                self.initialized = True
-                print("✓ 示教模式初始化完成！")
-                print("提示: 机械臂已展开但未使能，可以手动移动")
-            else:
-                print("✗ HOME命令发送失败")
+        # 1. 发送 !START 使能电机
+        if self.send_text_command("!START"):
+            print("✓ START命令已发送，等待5秒...")
+            time.sleep(5)
         else:
-            print("【正常模式初始化】- 发送!START和!HOME")
-            # 正常模式：先 !START，再 !HOME
-            if self.send_text_command("!START"):
-                print("✓ START命令已发送，等待5秒...")
-                time.sleep(5)
-            else:
-                print("✗ START命令发送失败")
-                return
+            print("✗ START命令发送失败")
+            return False
 
-            # 发送 !HOME
-            if self.send_text_command("!HOME"):
-                print("✓ HOME命令已发送，等待10秒...")
-                time.sleep(10)
-                self.initialized = True
-                print("✓ 设备初始化完成！")
-                print("提示: 机械臂已使能，无法手动移动")
-            else:
-                print("✗ HOME命令发送失败")
+        # 2. 发送 !HOME 展开机械臂
+        if self.send_text_command("!HOME"):
+            print("✓ HOME命令已发送，等待10秒...")
+            time.sleep(10)
+            self.initialized = True
+            print("✓ 设备初始化完成！")
+            print("提示: 机械臂已使能并展开，电机锁定，无法手动移动")
+            return True
+        else:
+            print("✗ HOME命令发送失败")
+            return False
 
     def send_text_command(self, command):
         """
@@ -221,21 +219,6 @@ class TextSerialClient:
             except Exception as e:
                 print(f"✗ 发送失败: {e}")
                 return False
-
-    def enable_motors(self):
-        """使能所有电机 - 进入位置控制模式"""
-        print("发送使能命令...")
-        return self.send_text_command("!ENABLE")
-
-    def disable_motors(self):
-        """禁用所有电机 - 可以手动移动"""
-        print("发送失能命令...")
-        return self.send_text_command("!DISABLE")
-
-    def stop_motors(self):
-        """停止所有电机"""
-        print("发送停止命令...")
-        return self.send_text_command("!STOP")
 
     def get_current_position(self):
         """
