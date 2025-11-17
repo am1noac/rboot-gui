@@ -34,6 +34,13 @@ class UDPClient:
             # 创建新socket
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+            # 绑定到本地端口（让OS自动选择）
+            self.client_socket.bind(('', 0))
+            local_addr = self.client_socket.getsockname()
+            print(f"本地绑定端口: {local_addr[1]}")
+
+            # 设置接收超时
             self.client_socket.settimeout(3.0)
 
             print(f"尝试连接 {self.server_address}:{self.server_port}")
@@ -81,7 +88,8 @@ class UDPClient:
 
                 # 发送消息
                 self.client_socket.sendto(message, (self.server_address, self.server_port))
-                print(f"消息发送成功 (尝试 {attempt + 1})")
+                hex_msg = ' '.join(f'{b:02X}' for b in message)
+                print(f"发送-> ID:{id} CMD:{cmd} [{hex_msg}]")
                 return True
 
             except Exception as e:
@@ -99,21 +107,28 @@ class UDPClient:
         if not self.connected:
             return
 
+        timeout_count = 0
         while not self._stop_receive:
             try:
                 data, addr = self.client_socket.recvfrom(1024)
                 if data:
+                    timeout_count = 0  # 重置超时计数
                     hex_data = ' '.join(f'{b:02X}' for b in data)
-                    print(f"收到: {hex_data}")
+                    print(f"收到来自 {addr}: {hex_data}")
 
                     if self.callback:
                         self.callback(hex_data)
+                    else:
+                        print("⚠️  回调未设置，数据被丢弃")
 
             except socket.timeout:
-                continue  # 超时正常
+                timeout_count += 1
+                if timeout_count % 5 == 0:  # 每15秒提示一次
+                    print(f"⏳ 等待数据中... (已等待 {timeout_count * 3}秒)")
+                continue
             except Exception as e:
                 if not self._stop_receive:
-                    print(f"接收错误: {e}")
+                    print(f"❌ 接收错误: {e}")
                     break
 
         print("接收线程停止")
