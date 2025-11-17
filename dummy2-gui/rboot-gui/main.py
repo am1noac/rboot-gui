@@ -22,9 +22,10 @@ def create_ui():
         # 连接模式选择
         connection_mode = ui.select(
             label='连接模式',
-            options=['UDP网络', 'USB串口(COM)'],
-            value='UDP网络'
-        )
+            options=['UDP网络', 'USB串口(CAN协议)', 'USB串口(文本协议)'],
+            value='USB串口(文本协议)',
+            on_change=lambda: toggle_config()
+        ).tooltip('文本协议适用于使用!START、&angle命令的设备')
 
         # UDP配置
         udp_config = ui.row()
@@ -32,26 +33,29 @@ def create_ui():
             ip_input = ui.input('设备IP地址', value='192.168.0.88', placeholder='192.168.0.88')
             port_input = ui.number('端口', value=9999, format='%d', min=1, max=65535)
 
-        # 串口配置（默认隐藏）
-        serial_config = ui.row().classes('hidden')
+        # 串口配置（默认显示）
+        serial_config = ui.row()
         with serial_config:
             port_select = ui.select(
                 label='串口',
                 options=['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'],
                 value='COM7'
             )
-            baudrate_input = ui.number('波特率', value=115200, format='%d')
+            baudrate_input = ui.number('波特率', value=9600, format='%d').tooltip('文本协议通常使用9600，CAN协议使用115200')
 
         # 模式切换逻辑
         def toggle_config():
             if connection_mode.value == 'UDP网络':
                 udp_config.set_visibility(True)
                 serial_config.set_visibility(False)
-            else:
+            elif 'CAN协议' in connection_mode.value:
                 udp_config.set_visibility(False)
                 serial_config.set_visibility(True)
-
-        connection_mode.on_value_change(lambda: toggle_config())
+                baudrate_input.set_value(115200)  # CAN协议使用115200
+            else:  # 文本协议
+                udp_config.set_visibility(False)
+                serial_config.set_visibility(True)
+                baudrate_input.set_value(9600)  # 文本协议使用9600
 
     def connect_device():
         global client_instance
@@ -84,17 +88,30 @@ def create_ui():
 
                 client_instance = UDPClient(target_ip, target_port)
 
-            else:  # USB串口模式
+            elif 'CAN协议' in connection_mode.value:
                 from serialclient import SerialClient
                 target_port = port_select.value
                 target_baudrate = int(baudrate_input.value)
 
-                print(f"连接模式: USB串口")
+                print(f"连接模式: USB串口 (CAN协议)")
                 print(f"串口: {target_port}")
                 print(f"波特率: {target_baudrate}")
                 print("="*50)
 
                 client_instance = SerialClient(port=target_port, baudrate=target_baudrate)
+
+            else:  # 文本协议模式
+                from textserialclient import TextSerialClient
+                target_port = port_select.value
+                target_baudrate = int(baudrate_input.value)
+
+                print(f"连接模式: USB串口 (文本协议)")
+                print(f"串口: {target_port}")
+                print(f"波特率: {target_baudrate}")
+                print(f"协议: ASCII文本 (!START, &angles)")
+                print("="*50)
+
+                client_instance = TextSerialClient(port=target_port, baudrate=target_baudrate)
 
             # 连接设备
             if client_instance.connect():
