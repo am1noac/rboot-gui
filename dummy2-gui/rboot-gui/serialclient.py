@@ -120,7 +120,7 @@ class SerialClient:
                         parity=serial.PARITY_NONE,
                         stopbits=serial.STOPBITS_ONE,
                         timeout=1.0,  # 读取超时1秒
-                        write_timeout=2.0,  # 写入超时2秒
+                        write_timeout=None,  # 禁用写入超时，防止阻塞
                         xonxoff=False,
                         rtscts=False,
                         dsrdtr=False
@@ -218,7 +218,12 @@ class SerialClient:
 
                     # 发送消息
                     bytes_written = self.serial_conn.write(message)
-                    self.serial_conn.flush()  # 确保数据发送出去
+
+                    # 尝试flush，如果超时则忽略（有些设备不支持flush）
+                    try:
+                        self.serial_conn.flush()
+                    except:
+                        pass  # 忽略flush错误
 
                     if bytes_written != len(message):
                         raise serial.SerialException(f"只发送了 {bytes_written}/{len(message)} 字节")
@@ -233,8 +238,9 @@ class SerialClient:
                     time.sleep(self.send_interval)
                     return True
 
-                except serial.SerialTimeoutException:
-                    print(f"发送超时 (尝试 {attempt + 1})")
+                except serial.SerialTimeoutException as e:
+                    print(f"发送超时 (尝试 {attempt + 1}): {e}")
+                    print(f"  详细: write_timeout={self.serial_conn.write_timeout}秒")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delays[attempt])
 
