@@ -101,8 +101,9 @@ joint_angle_tmp = {'J1': 0.0, 'J2': 0.0, 'J3': 0.0, 'J4': 0.0, 'J5': 0.0, 'J6': 
 joint_angle_lock = threading.Lock()
 joint_json = 'jason.json'
 
-teaching = []    
-count = 0    
+teaching = []
+count = 0
+teaching_mode_enabled = False  # 示教模式状态
 
 buffer = []
 
@@ -134,6 +135,7 @@ def controls(client) -> None:
         for i in range(6):
             cid = i + 1
             client.send_message(cid, type, struct.pack('<I', cmd1), struct.pack('<I', cmd2), can_data.Message_type['short'])
+            time.sleep(0.02)  # 添加20ms延迟，防止UDP消息丢失
 
     def send_position(id, sign: int, position) -> None:
         # print("send_position.....", id)
@@ -206,10 +208,10 @@ def controls(client) -> None:
                                     .tooltip('Connect to CAN BUS')
             ui.button(on_click=unregister_cb).props('icon=cancel round') \
                                     .tooltip('Disconnect to CAN BUS')
-            ui.button(on_click=lambda: send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['CLOSED_LOOP_CONTROL'], 0)) \
+            ui.button(on_click=lambda: [send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['CLOSED_LOOP_CONTROL'], 0), ui.notify('所有关节已启用闭环控制', type='positive')]) \
                 .props('icon=repeat round') \
                 .tooltip('Enable all joints to close loop mode')
-            ui.button(on_click=lambda: send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], 0)).props('icon=close round') \
+            ui.button(on_click=lambda: [send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], 0), ui.notify('所有关节已设为Idle模式，可以手动移动', type='info')]).props('icon=close round') \
                 .tooltip('Enable all joints to idle mode')
 
         # with ui.row():
@@ -313,6 +315,37 @@ def controls(client) -> None:
                     ui.button(on_click=lambda: send_torque_l(gripper_id.value, 1)).props('round flat icon=skip_next')
 
     steps_container = ui.column()
+    teaching_status_label = None  # 将在UI中创建
+
+    def enable_teaching_mode():
+        """启用示教模式 - 将所有电机设为idle状态，可手动移动"""
+        global teaching_mode_enabled
+        teaching_mode_enabled = True
+        # 将所有6个电机设为idle状态
+        send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], 0)
+        if teaching_status_label:
+            teaching_status_label.set_text('示教模式: 已启用 (可手动移动机械臂)')
+            teaching_status_label.style('color: #03fc1c; font-weight: bold')
+        ui.notify('示教模式已启用！现在可以手动移动机械臂', type='positive')
+
+    def disable_teaching_mode():
+        """禁用示教模式 - 将所有电机恢复到闭环控制"""
+        global teaching_mode_enabled
+        teaching_mode_enabled = False
+        # 将所有6个电机恢复到闭环控制状态
+        send_6d_msg(0, can_data.command_id['Set_Axis_State'], can_data.AxisState['CLOSED_LOOP_CONTROL'], 0)
+        if teaching_status_label:
+            teaching_status_label.set_text('示教模式: 已禁用')
+            teaching_status_label.style('color: #fc0320; font-weight: bold')
+        ui.notify('示教模式已禁用', type='warning')
+
+    def record_current_position():
+        """记录当前机械臂位置到示教序列"""
+        with joint_angle_lock:
+            new_position = joint_angle_tmp.copy()
+            can_data.joint_angles.append(new_position)
+        ui.notify(f'已记录位置: J1={new_position["J1"]:.2f}°, J2={new_position["J2"]:.2f}°, J3={new_position["J3"]:.2f}°', type='positive')
+        update_list()
 
     def add_angles():
         # joint_angles.append(joint_angle_tmp)
@@ -372,14 +405,44 @@ def controls(client) -> None:
             send_torque(7, 1, tmp_angle['Torque'])    
             ui.notify(f'Gripper has been closed {tmp_angle["Torque"]}')            
     def update_list():
+            nonlocal teaching_status_label
             steps_container.clear()
             with steps_container:
                 with ui.card().bind_visibility_from(mode, 'value', value=2):
+                    # 示教控制面板
+                    with ui.card().classes('bg-blue-50'):
+                        ui.markdown('##### 手动示教控制')
+                        with ui.row().classes('w-full items-center'):
+                            teaching_status_label = ui.label('示教模式: 已禁用')
+                            teaching_status_label.style('color: #fc0320; font-weight: bold')
+                        with ui.row().classes('w-full'):
+                            ui.button('启用示教模式', on_click=enable_teaching_mode, icon='pan_tool') \
+                                .props('color=positive') \
+                                .tooltip('将所有电机设为idle，可手动移动机械臂')
+                            ui.button('禁用示教模式', on_click=disable_teaching_mode, icon='back_hand') \
+                                .props('color=warning') \
+                                .tooltip('恢复电机闭环控制')
+                            ui.button('记录当前位置', on_click=record_current_position, icon='add_location') \
+                                .props('color=primary') \
+                                .tooltip('将当前机械臂位置添加到动作序列')
+                        with ui.column().classes('w-full'):
+                            ui.markdown('**当前关节角度：**')
+                            with ui.row().classes('w-full'):
+                                ui.label().bind_text_from(joint_angle_tmp, 'J1', backward=lambda v: f'J1: {v:.2f}°')
+                                ui.label().bind_text_from(joint_angle_tmp, 'J2', backward=lambda v: f'J2: {v:.2f}°')
+                                ui.label().bind_text_from(joint_angle_tmp, 'J3', backward=lambda v: f'J3: {v:.2f}°')
+                                ui.label().bind_text_from(joint_angle_tmp, 'J4', backward=lambda v: f'J4: {v:.2f}°')
+                                ui.label().bind_text_from(joint_angle_tmp, 'J5', backward=lambda v: f'J5: {v:.2f}°')
+                                ui.label().bind_text_from(joint_angle_tmp, 'J6', backward=lambda v: f'J6: {v:.2f}°')
+
+                    ui.separator()
+
+                    # 动作序列管理
                     with ui.list().props('bordered separator'):
                         with ui.column():
                             with ui.row().classes('w-full'):
-                                d = ui.number('Step delays(s)', format='%.3f', value=1.5) 
-                                r = ui.number('Repeat times', format='%d', value=1) 
+                                d = ui.number('Step delays(s)', format='%.3f', value=1.5)
+                                r = ui.number('Repeat times', format='%d', value=1)
                                 def send_delay_l(): repeat_steps(d.value, r.value)
                                 ui.button('Add', on_click=add_angles)
                                 ui.button('Delete', on_click=remove_contact)
