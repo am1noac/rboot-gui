@@ -149,8 +149,12 @@ def create_ui():
 
                 print("\n✓ 设备连接成功！")
 
+                # 根据不同模式显示提示
                 if connection_mode.value == 'USB串口(文本协议)':
-                    print("提示: 文本协议设备已初始化 (!START, !HOME 已发送)\n")
+                    if should_auto_init:
+                        print("提示: 自动初始化模式 - 已发送 !START + !HOME\n")
+                    else:
+                        print("提示: 手动模式 - 未发送初始化命令，可手动移动机械臂\n")
                 else:
                     print("提示: 请点击界面上的 '连接CAN总线' 按钮\n")
 

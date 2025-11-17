@@ -19,10 +19,16 @@ def text_controls(client):
     # 状态显示
     with ui.card().classes('w-full'):
         ui.markdown('### 设备状态')
-        status_label = ui.label('已连接 - 设备已初始化 (!START, !HOME 已发送)')
-        status_label.style('color: #03fc1c; font-weight: bold')
 
-        ui.label('提示: 此设备使用文本协议，!START 后电机使能（锁定），无法手动移动')
+        # 根据实际初始化状态显示
+        if client.initialized:
+            status_label = ui.label('已连接 - 设备已初始化 (!START, !HOME 已发送)')
+            status_label.style('color: #03fc1c; font-weight: bold')
+        else:
+            status_label = ui.label('已连接 - 手动模式（未初始化，可手动移动）')
+            status_label.style('color: #FFA500; font-weight: bold')
+
+        ui.label('提示: 手动模式下可以移动机械臂，点击"读取并记录位置"读取当前角度')
 
     # 设备控制按钮
     with ui.card().classes('w-full'):
@@ -119,12 +125,16 @@ def text_controls(client):
         teaching_status = ui.label('提示: 设备上电后默认可以手动移动')
         teaching_status.style('color: #888; font-weight: bold')
 
+        # 实时位置显示
+        position_display = ui.label('当前位置: (未读取)')
+        position_display.style('color: #666; font-family: monospace')
+
         ui.markdown('''
 **示教流程：**
 1. **确保未发送初始化命令**（选择"手动模式"连接）
-2. 此时机械臂处于上电默认状态，可以手动移动
-3. **手动移动**机械臂到目标位置
-4. 点击"读取并记录位置"（发送 #GETJPOS 自动读取）
+2. 点击"启动位置监控"开始实时显示位置
+3. **手动移动**机械臂到目标位置（观察实时位置）
+4. 点击"读取并记录位置"保存当前位置
 5. 重复步骤 3-4 记录多个位置
 6. 记录完成后，点击"初始化设备"按钮使能电机
 7. 点击"播放动作序列"执行录制的动作
@@ -132,6 +142,47 @@ def text_controls(client):
 **注意：** 此设备不支持 !DISABLE 命令，无法在使能后再失能。
 因此必须在连接时选择"手动模式"以保持可移动状态。
         ''')
+
+        # 位置监控定时器
+        position_timer = None
+        monitoring = False
+
+        def update_position_display():
+            """更新位置显示"""
+            current_pos = client.get_current_position()
+            if current_pos:
+                # 更新角度输入框
+                for i in range(1, 7):
+                    angles[f'J{i}'].set_value(current_pos[i-1])
+                # 更新显示
+                pos_str = f"当前位置: J1={current_pos[0]:.1f}° J2={current_pos[1]:.1f}° J3={current_pos[2]:.1f}° J4={current_pos[3]:.1f}° J5={current_pos[4]:.1f}° J6={current_pos[5]:.1f}°"
+                position_display.set_text(pos_str)
+                position_display.style('color: #03fc1c; font-family: monospace; font-weight: bold')
+
+        def toggle_monitoring():
+            """切换位置监控"""
+            nonlocal position_timer, monitoring
+
+            if not monitoring:
+                # 启动监控
+                position_timer = ui.timer(1.0, update_position_display)  # 每1秒更新
+                monitoring = True
+                monitor_btn.set_text('停止位置监控')
+                monitor_btn.props('color=negative')
+                teaching_status.set_text('位置监控: 已启动')
+                teaching_status.style('color: #03fc1c; font-weight: bold')
+                ui.notify('位置监控已启动，每秒自动读取位置', type='positive')
+            else:
+                # 停止监控
+                if position_timer:
+                    position_timer.cancel()
+                    position_timer = None
+                monitoring = False
+                monitor_btn.set_text('启动位置监控')
+                monitor_btn.props('color=primary')
+                teaching_status.set_text('位置监控: 已停止')
+                teaching_status.style('color: #888; font-weight: bold')
+                ui.notify('位置监控已停止', type='info')
 
         def read_and_record():
             """读取当前位置并记录"""
@@ -152,7 +203,9 @@ def text_controls(client):
                 ui.notify('读取位置失败', type='negative')
 
         with ui.row().classes('w-full'):
-            ui.button('读取并记录位置', on_click=read_and_record, icon='add_location', color='primary') \
+            monitor_btn = ui.button('启动位置监控', on_click=toggle_monitoring, icon='visibility', color='primary') \
+                .tooltip('每秒自动读取并显示当前位置')
+            ui.button('读取并记录位置', on_click=read_and_record, icon='add_location', color='positive') \
                 .tooltip('发送 #GETJPOS 读取当前位置并保存')
 
         positions_container = ui.column().classes('w-full')
