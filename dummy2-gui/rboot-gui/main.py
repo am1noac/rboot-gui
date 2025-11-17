@@ -24,7 +24,7 @@ def create_ui():
         ).bind_value(connection_mode, 'type')
         ui.label('').bind_text_from(
             connection_mode, 'type',
-            backward=lambda x: f'当前: {"串口模式 (COM端口)" if x == "serial" else "网络模式 (192.168.0.4:3333)"}'
+            backward=lambda x: f'当前: {"串口模式 (COM端口)" if x == "serial" else "网络模式 (192.168.0.88:9999)"}'
         )
 
     container = ui.column()
@@ -68,11 +68,11 @@ def create_ui():
                 # UDP网络模式
                 from udpclient import UDPClient
                 print(f"连接模式: UDP网络")
-                print(f"目标地址: 192.168.0.4:3333")
+                print(f"目标地址: 192.168.0.88:9999")
                 print("="*50 + "\n")
 
-                # 创建UDP连接
-                client_instance = UDPClient('192.168.0.4', 3333)
+                # 创建UDP连接（使用原始项目配置）
+                client_instance = UDPClient('192.168.0.88', 9999)
 
             # 尝试连接
             if client_instance.connect():
@@ -107,13 +107,13 @@ def create_ui():
                     print("4. 尝试重新插拔USB线")
                     print("5. 运行: python serialclient.py 查看可用端口\n")
                 else:
-                    ui.notify('网络连接失败！请检查:\n1. 设备是否开机\n2. 网络线是否连接\n3. IP地址是否正确(192.168.0.4)', type='negative')
+                    ui.notify('网络连接失败！请检查:\n1. 设备是否开机\n2. 网络线是否连接\n3. IP地址是否正确(192.168.0.88)', type='negative')
                     print("\n✗ 连接失败！\n")
                     print("故障排除:")
                     print("1. 检查设备是否开机")
-                    print("2. 检查网络线是否连接")
-                    print("3. 检查IP地址是否正确 (应该是 192.168.0.4)")
-                    print("4. 尝试 ping 192.168.0.4 测试网络连通性\n")
+                    print("2. 检查网络线是否连接（或确保设备连接到同一WiFi）")
+                    print("3. 检查IP地址是否正确 (应该是 192.168.0.88)")
+                    print("4. 尝试 ping 192.168.0.88 测试网络连通性\n")
 
                 client_instance = None
 
