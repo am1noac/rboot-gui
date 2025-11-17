@@ -61,8 +61,6 @@ def create_ui():
         global client_instance
 
         try:
-            from controls import controls
-
             # 如果已有连接，先关闭
             if client_instance:
                 try:
@@ -79,6 +77,8 @@ def create_ui():
             # 根据选择的模式连接
             if connection_mode.value == 'UDP网络':
                 from udpclient import UDPClient
+                from controls import controls
+
                 target_ip = ip_input.value
                 target_port = int(port_input.value)
 
@@ -87,9 +87,12 @@ def create_ui():
                 print("="*50)
 
                 client_instance = UDPClient(target_ip, target_port)
+                control_ui = controls
 
             elif 'CAN协议' in connection_mode.value:
                 from serialclient import SerialClient
+                from controls import controls
+
                 target_port = port_select.value
                 target_baudrate = int(baudrate_input.value)
 
@@ -99,9 +102,12 @@ def create_ui():
                 print("="*50)
 
                 client_instance = SerialClient(port=target_port, baudrate=target_baudrate)
+                control_ui = controls
 
             else:  # 文本协议模式
                 from textserialclient import TextSerialClient
+                from text_controls import text_controls
+
                 target_port = port_select.value
                 target_baudrate = int(baudrate_input.value)
 
@@ -112,6 +118,7 @@ def create_ui():
                 print("="*50)
 
                 client_instance = TextSerialClient(port=target_port, baudrate=target_baudrate)
+                control_ui = text_controls
 
             # 连接设备
             if client_instance.connect():
@@ -119,12 +126,16 @@ def create_ui():
                 status.set_text('已连接!')
 
                 print("\n✓ 设备连接成功！")
-                print("提示: 请点击界面上的 '连接CAN总线' 按钮\n")
 
-                # 显示控制界面
+                if connection_mode.value == 'USB串口(文本协议)':
+                    print("提示: 文本协议设备已初始化 (!START, !HOME 已发送)\n")
+                else:
+                    print("提示: 请点击界面上的 '连接CAN总线' 按钮\n")
+
+                # 显示对应的控制界面
                 container.clear()
                 with container:
-                    controls(client_instance)
+                    control_ui(client_instance)
 
                 ui.notify('设备连接成功!')
             else:
