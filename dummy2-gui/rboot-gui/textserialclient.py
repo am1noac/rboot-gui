@@ -215,6 +215,54 @@ class TextSerialClient:
         print("发送停止命令...")
         return self.send_text_command("!STOP")
 
+    def get_current_position(self):
+        """
+        获取当前关节位置
+
+        Returns:
+            list: 6个关节角度 [J1, J2, J3, J4, J5, J6]，失败返回None
+        """
+        if not self.connected or self.serial_conn is None:
+            print("✗ 未连接，无法获取位置")
+            return None
+
+        with self.send_lock:
+            try:
+                # 清空接收缓冲区
+                self.serial_conn.reset_input_buffer()
+
+                # 发送查询命令
+                command = "#GETJPOS\r\n"
+                self.serial_conn.write(command.encode('utf-8'))
+                self.serial_conn.flush()
+
+                print(f"✓ 发送查询命令: #GETJPOS")
+
+                # 等待响应
+                time.sleep(0.3)
+
+                if self.serial_conn.in_waiting > 0:
+                    response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+                    print(f"收到响应: {response}")
+
+                    # 解析响应: "ok J1 J2 J3 J4 J5 J6"
+                    if response.startswith('ok'):
+                        parts = response.split()
+                        if len(parts) >= 7:  # "ok" + 6个数值
+                            angles = [float(parts[i]) for i in range(1, 7)]
+                            print(f"✓ 当前位置: {angles}")
+                            return angles
+                    else:
+                        print(f"✗ 无法解析响应: {response}")
+                        return None
+                else:
+                    print("✗ 没有收到响应")
+                    return None
+
+            except Exception as e:
+                print(f"✗ 获取位置失败: {e}")
+                return None
+
     def send_position(self, angles):
         """
         发送位置命令

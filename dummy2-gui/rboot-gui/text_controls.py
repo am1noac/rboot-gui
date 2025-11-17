@@ -105,22 +105,66 @@ def text_controls(client):
 
     # 示教功能
     with ui.card().classes('w-full'):
-        ui.markdown('### 示教模式（手动记录）')
+        ui.markdown('### 示教模式（自动记录）')
+
+        teaching_status = ui.label('示教模式: 未启用')
+        teaching_status.style('color: #fc0320; font-weight: bold')
 
         ui.markdown('''
 **使用说明：**
-1. 发送 **!HOME** 命令（尝试取消使能）
-2. 如果可以手动移动，将机械臂移动到目标位置
-3. **手动输入**当前角度值到上方输入框
-4. 点击"记录当前位置"保存
-5. 重复步骤 2-4 记录多个位置
-6. 点击"播放动作序列"执行
+1. 点击"启用示教模式"（发送 !DISABLE 失能电机）
+2. 手动移动机械臂到目标位置
+3. 点击"读取并记录位置"（自动发送 #GETJPOS 读取）
+4. 重复步骤 2-3 记录多个位置
+5. 点击"播放动作序列"执行
         ''')
+
+        def enable_teaching():
+            """启用示教模式 - 失能电机"""
+            if client.disable_motors():  # 发送 !DISABLE
+                teaching_status.set_text('示教模式: 已启用 - 可以手动移动机械臂')
+                teaching_status.style('color: #03fc1c; font-weight: bold')
+                ui.notify('示教模式已启用！现在可以手动移动机械臂', type='positive')
+            else:
+                ui.notify('启用失败', type='negative')
+
+        def disable_teaching():
+            """禁用示教模式 - 重新使能电机"""
+            if client.send_text_command("!START"):
+                teaching_status.set_text('示教模式: 未启用')
+                teaching_status.style('color: #fc0320; font-weight: bold')
+                ui.notify('示教模式已禁用，电机已使能', type='warning')
+            else:
+                ui.notify('禁用失败', type='negative')
+
+        def read_and_record():
+            """读取当前位置并记录"""
+            current_pos = client.get_current_position()  # 发送 #GETJPOS
+
+            if current_pos:
+                # 更新UI显示
+                for i in range(1, 7):
+                    angles[f'J{i}'].set_value(current_pos[i-1])
+
+                # 记录位置
+                teaching_positions.append(current_pos.copy())
+                ui.notify(f'✓ 已记录位置 #{len(teaching_positions)}: J1={current_pos[0]:.1f}°, J2={current_pos[1]:.1f}°, J3={current_pos[2]:.1f}°', type='positive')
+                update_positions_list()
+            else:
+                ui.notify('读取位置失败', type='negative')
+
+        with ui.row().classes('w-full'):
+            ui.button('启用示教模式', on_click=enable_teaching, icon='pan_tool', color='positive') \
+                .tooltip('发送 !DISABLE - 失能电机，可手动移动')
+            ui.button('禁用示教模式', on_click=disable_teaching, icon='lock', color='warning') \
+                .tooltip('发送 !START - 重新使能电机')
+            ui.button('读取并记录位置', on_click=read_and_record, icon='add_location', color='primary') \
+                .tooltip('发送 #GETJPOS 读取当前位置并保存')
 
         positions_container = ui.column().classes('w-full')
 
         def record_position():
-            """记录当前位置"""
+            """手动记录当前位置（从输入框）"""
             angle_values = [angles[f'J{i}'].value for i in range(1, 7)]
             teaching_positions.append(angle_values.copy())
             ui.notify(f'已记录位置 #{len(teaching_positions)}: {angle_values}', type='positive')
