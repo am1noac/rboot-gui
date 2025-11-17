@@ -33,9 +33,9 @@ def test_protocol(port, baudrate):
 
         print(f"✓ 串口打开成功 (DTR=True, RTS=True)")
 
-        # 测试1: CAN协议命令 (查询电机1)
+        # 测试1: CAN协议命令 (查询电机1) - 注意：必须有0xCC尾部！
         print(f"\n[测试1] 发送CAN协议命令...")
-        can_cmd = bytearray([0xBB, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        can_cmd = bytearray([0xBB, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCC])
         hex_str = ' '.join(f'{b:02X}' for b in can_cmd)
         print(f"  发送: {hex_str}")
         ser.write(can_cmd)

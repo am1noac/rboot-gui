@@ -24,8 +24,8 @@ def test_udp_port(host, port, timeout=2):
         local_port = sock.getsockname()[1]
         print(f"本地端口: {local_port}")
 
-        # 发送CAN查询命令（查询电机1）
-        can_cmd = bytearray([0xBB, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        # 发送正确格式的CAN命令（带0xCC尾部，参考dummy2-gui/main.py）
+        can_cmd = bytearray([0xBB, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCC])
         hex_str = ' '.join(f'{b:02X}' for b in can_cmd)
 
         print(f"发送命令: {hex_str}")
