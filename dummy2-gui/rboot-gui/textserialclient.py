@@ -235,13 +235,18 @@ class TextSerialClient:
 
         print(f"[位置查询] 串口状态: connected={self.connected}")
 
+        print("[位置查询] 准备获取发送锁...")
         with self.send_lock:
+            print("[位置查询] 已获取发送锁")
             try:
                 # 清空接收缓冲区
+                print("[位置查询] 正在清空缓冲区...")
                 self.serial_conn.reset_input_buffer()
+                print("[位置查询] 缓冲区已清空")
 
                 # 发送查询命令
                 command = "#GETJPOS\r\n"
+                print(f"[位置查询] 正在发送命令: {command.strip()}")
                 bytes_written = self.serial_conn.write(command.encode('utf-8'))
                 self.serial_conn.flush()
 
