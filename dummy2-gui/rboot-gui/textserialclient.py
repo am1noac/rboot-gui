@@ -200,6 +200,21 @@ class TextSerialClient:
                 print(f"✗ 发送失败: {e}")
                 return False
 
+    def enable_motors(self):
+        """使能所有电机 - 进入位置控制模式"""
+        print("发送使能命令...")
+        return self.send_text_command("!ENABLE")
+
+    def disable_motors(self):
+        """禁用所有电机 - 可以手动移动"""
+        print("发送失能命令...")
+        return self.send_text_command("!DISABLE")
+
+    def stop_motors(self):
+        """停止所有电机"""
+        print("发送停止命令...")
+        return self.send_text_command("!STOP")
+
     def send_position(self, angles):
         """
         发送位置命令
