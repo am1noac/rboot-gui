@@ -27,6 +27,15 @@ def create_ui():
             on_change=lambda: toggle_config()
         ).tooltip('文本协议适用于使用!START、&angle命令的设备')
 
+        # 文本协议初始化模式选择
+        init_mode_row = ui.row()
+        with init_mode_row:
+            init_mode = ui.select(
+                label='初始化模式',
+                options=['示教模式(仅HOME,可手动移动)', '正常模式(START+HOME,电机使能)'],
+                value='示教模式(仅HOME,可手动移动)'
+            ).tooltip('示教模式: 仅发送!HOME，电机失能，可手动移动\n正常模式: 发送!START+!HOME，电机使能，无法手动移动')
+
         # UDP配置
         udp_config = ui.row()
         with udp_config:
@@ -48,14 +57,20 @@ def create_ui():
             if connection_mode.value == 'UDP网络':
                 udp_config.set_visibility(True)
                 serial_config.set_visibility(False)
+                init_mode_row.set_visibility(False)
             elif 'CAN协议' in connection_mode.value:
                 udp_config.set_visibility(False)
                 serial_config.set_visibility(True)
+                init_mode_row.set_visibility(False)
                 baudrate_input.set_value(115200)  # CAN协议使用115200
             else:  # 文本协议
                 udp_config.set_visibility(False)
                 serial_config.set_visibility(True)
+                init_mode_row.set_visibility(True)  # 显示初始化模式选项
                 baudrate_input.set_value(9600)  # 文本协议使用9600
+
+        # 初始化时调用一次，设置正确的显示状态
+        toggle_config()
 
     def connect_device():
         global client_instance
@@ -110,14 +125,21 @@ def create_ui():
 
                 target_port = port_select.value
                 target_baudrate = int(baudrate_input.value)
+                # 判断是否为示教模式
+                is_teaching_mode = '示教模式' in init_mode.value
 
                 print(f"连接模式: USB串口 (文本协议)")
                 print(f"串口: {target_port}")
                 print(f"波特率: {target_baudrate}")
                 print(f"协议: ASCII文本 (!START, &angles)")
+                print(f"初始化: {init_mode.value}")
                 print("="*50)
 
-                client_instance = TextSerialClient(port=target_port, baudrate=target_baudrate)
+                client_instance = TextSerialClient(
+                    port=target_port,
+                    baudrate=target_baudrate,
+                    teaching_mode=is_teaching_mode
+                )
                 control_ui = text_controls
 
             # 连接设备
