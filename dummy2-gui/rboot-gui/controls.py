@@ -228,9 +228,17 @@ def controls(client) -> None:
 
         print(f"✓ CAN总线已连接")
         print(f"提示: 如果没有收到数据，请检查：")
-        print(f"  1. 设备IP和端口是否正确 (当前: {client.server_address}:{client.server_port})")
-        print(f"  2. 设备是否已开机并连接到网络")
-        print(f"  3. 防火墙是否阻止了UDP通信")
+
+        # 根据客户端类型显示不同的调试信息
+        if hasattr(client, 'server_address'):  # UDP模式
+            print(f"  1. 设备IP和端口是否正确 (当前: {client.server_address}:{client.server_port})")
+            print(f"  2. 设备是否已开机并连接到网络")
+            print(f"  3. 防火墙是否阻止了UDP通信")
+        else:  # 串口模式
+            print(f"  1. 串口号是否正确 (当前: {client.port})")
+            print(f"  2. 波特率是否匹配 (当前: {client.baudrate})")
+            print(f"  3. 设备是否已开机并连接到电脑")
+
         print(f"  4. 尝试先设置电机为IDLE模式（点击右侧按钮）")
         print("="*50 + "\n")
 

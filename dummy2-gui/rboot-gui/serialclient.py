@@ -32,7 +32,7 @@ class SerialClient:
         self.connect_interval = 0.5  # 最小连接间隔0.5秒
         self.send_lock = threading.Lock()  # 发送锁
         self.last_receive_time = time.time()
-        self.send_interval = 0.02  # 发送间隔20ms (适配115200波特率)
+        self.send_interval = 0.05  # 发送间隔50ms (适配115200波特率，避免设备过载)
 
     def list_ports(self):
         """列出所有可用的串口"""
@@ -102,16 +102,21 @@ class SerialClient:
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
                 timeout=1.0,  # 读取超时1秒
-                write_timeout=2.0,  # 写入超时2秒
-                xonxoff=False,
-                rtscts=False,
-                dsrdtr=False
+                write_timeout=5.0,  # 写入超时5秒（增加超时时间）
+                xonxoff=False,  # 禁用软件流控制
+                rtscts=False,   # 禁用硬件流控制
+                dsrdtr=False    # 禁用DTR/DSR
             )
+
+            # 设置DTR和RTS信号（某些设备需要这些信号）
+            self.serial_conn.dtr = True
+            self.serial_conn.rts = True
+            time.sleep(0.1)  # 等待设备响应信号
 
             # 清空缓冲区
             self.serial_conn.reset_input_buffer()
             self.serial_conn.reset_output_buffer()
-            time.sleep(0.1)
+            time.sleep(0.2)  # 增加等待时间
 
             self.connected = True
             self.last_connect_time = time.time()
@@ -194,10 +199,18 @@ class SerialClient:
 
                     # 发送间隔控制
                     time.sleep(self.send_interval)
+
+                    # 只在第一次成功时打印（避免刷屏）
+                    if not hasattr(self, '_first_send_success'):
+                        self._first_send_success = True
+                        hex_msg = ' '.join(f'{b:02X}' for b in message)
+                        print(f"✓ 消息发送成功！格式: {hex_msg}")
+
                     return True
 
-                except serial.SerialTimeoutException:
-                    print(f"发送超时 (尝试 {attempt + 1})")
+                except serial.SerialTimeoutException as e:
+                    print(f"⚠️ 发送超时 (尝试 {attempt + 1}/{max_retries})")
+                    print(f"   详情: 写入缓冲区超时，可能设备接收不过来")
                     if attempt < max_retries - 1:
                         time.sleep(retry_delays[attempt])
 
