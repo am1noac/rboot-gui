@@ -18,15 +18,45 @@ def create_ui():
     # 连接配置输入框
     with ui.card().classes('w-full'):
         ui.markdown('### 设备连接配置')
-        with ui.row():
+
+        # 连接模式选择
+        connection_mode = ui.select(
+            label='连接模式',
+            options=['UDP网络', 'USB串口(COM)'],
+            value='UDP网络'
+        )
+
+        # UDP配置
+        udp_config = ui.row()
+        with udp_config:
             ip_input = ui.input('设备IP地址', value='192.168.0.88', placeholder='192.168.0.88')
             port_input = ui.number('端口', value=9999, format='%d', min=1, max=65535)
+
+        # 串口配置（默认隐藏）
+        serial_config = ui.row().classes('hidden')
+        with serial_config:
+            port_select = ui.select(
+                label='串口',
+                options=['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'],
+                value='COM7'
+            )
+            baudrate_input = ui.number('波特率', value=115200, format='%d')
+
+        # 模式切换逻辑
+        def toggle_config():
+            if connection_mode.value == 'UDP网络':
+                udp_config.set_visibility(True)
+                serial_config.set_visibility(False)
+            else:
+                udp_config.set_visibility(False)
+                serial_config.set_visibility(True)
+
+        connection_mode.on_value_change(lambda: toggle_config())
 
     def connect_device():
         global client_instance
 
         try:
-            from udpclient import UDPClient
             from controls import controls
 
             # 如果已有连接，先关闭
@@ -39,19 +69,34 @@ def create_ui():
 
             status.set_text('连接中...')
 
-            # 使用用户输入的IP和端口
-            target_ip = ip_input.value
-            target_port = int(port_input.value)
-
             print("="*50)
             print("开始连接设备")
-            print(f"连接模式: UDP网络")
-            print(f"目标地址: {target_ip}:{target_port}")
-            print("="*50)
 
-            # 创建新连接
-            client_instance = UDPClient(target_ip, target_port)
+            # 根据选择的模式连接
+            if connection_mode.value == 'UDP网络':
+                from udpclient import UDPClient
+                target_ip = ip_input.value
+                target_port = int(port_input.value)
 
+                print(f"连接模式: UDP网络")
+                print(f"目标地址: {target_ip}:{target_port}")
+                print("="*50)
+
+                client_instance = UDPClient(target_ip, target_port)
+
+            else:  # USB串口模式
+                from serialclient import SerialClient
+                target_port = port_select.value
+                target_baudrate = int(baudrate_input.value)
+
+                print(f"连接模式: USB串口")
+                print(f"串口: {target_port}")
+                print(f"波特率: {target_baudrate}")
+                print("="*50)
+
+                client_instance = SerialClient(port=target_port, baudrate=target_baudrate)
+
+            # 连接设备
             if client_instance.connect():
                 client_instance.start_receive_thread()
                 status.set_text('已连接!')
