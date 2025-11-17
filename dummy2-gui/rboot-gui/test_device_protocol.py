@@ -14,6 +14,7 @@ def test_protocol(port, baudrate):
     print(f"测试 {port} @ {baudrate} 波特率")
     print(f"{'='*60}")
 
+    ser = None
     try:
         ser = serial.Serial(
             port=port,
@@ -44,7 +45,6 @@ def test_protocol(port, baudrate):
             print(f"    HEX: {hex_resp}")
             print(f"    ASCII: {ascii_resp}")
             print(f"  ✅ 设备响应CAN协议！")
-            ser.close()
             return "CAN"
         else:
             print(f"  ✗ 无响应")
@@ -74,16 +74,15 @@ def test_protocol(port, baudrate):
                     hex_resp = ' '.join(f'{b:02X}' for b in response[:min(32, len(response))])
                     print(f"    HEX: {hex_resp}")
                 print(f"  ✅ 设备响应ODrive ASCII协议！")
-                ser.close()
                 return "ODrive"
             else:
                 print(f"  ✗ 无响应")
 
         # 测试3: 监听任何数据
-        print(f"\n[测试3] 监听30秒，看是否有主动发送的数据...")
+        print(f"\n[测试3] 监听5秒，看是否有主动发送的数据...")
         print(f"  (请尝试移动机械臂或按下设备上的按钮)")
         start_time = time.time()
-        while time.time() - start_time < 30:
+        while time.time() - start_time < 5:
             if ser.in_waiting > 0:
                 data = ser.read(ser.in_waiting)
                 print(f"\n  ✓ 收到数据: {len(data)} 字节")
@@ -91,12 +90,10 @@ def test_protocol(port, baudrate):
                 ascii_data = ''.join(chr(b) if 32 <= b < 127 else '.' for b in data[:min(32, len(data))])
                 print(f"    HEX: {hex_data}")
                 print(f"    ASCII: {ascii_data}")
-                ser.close()
                 return "Unknown"
             time.sleep(0.1)
 
-        print(f"  ✗ 30秒内无任何数据")
-        ser.close()
+        print(f"  ✗ 5秒内无任何数据")
         return None
 
     except serial.SerialException as e:
@@ -105,6 +102,14 @@ def test_protocol(port, baudrate):
     except Exception as e:
         print(f"✗ 错误: {e}")
         return None
+    finally:
+        # 确保串口一定被关闭
+        if ser and ser.is_open:
+            try:
+                ser.close()
+                print(f"✓ 串口已关闭")
+            except:
+                pass
 
 def main():
     print("=" * 60)
@@ -138,8 +143,8 @@ def main():
             print("✗ 无效选择")
             return
 
-    # 测试常用波特率
-    baudrates = [115200, 9600, 57600, 38400, 19200, 230400]
+    # 测试常用波特率 (9600优先，因为设备管理器显示9600)
+    baudrates = [9600, 115200, 57600, 38400, 19200, 230400]
 
     results = {}
     for baudrate in baudrates:
