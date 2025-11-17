@@ -57,15 +57,28 @@ class SerialClient:
         for i, port in enumerate(ports):
             print(f"  [{i+1}] {port['device']} - {port['description']}")
 
-        # 优先选择USB串口
+        # 优先选择USB串口 (排除COM1/COM2等主板串口)
+        usb_ports = []
         for port in ports:
-            if 'USB' in port['description'].upper() or 'CH340' in port['description'].upper():
-                print(f"✓ 自动选择: {port['device']}")
-                return port['device']
+            desc_upper = port['description'].upper()
+            # 检查是否是USB串口
+            if any(keyword in desc_upper for keyword in ['USB', 'CH340', 'CH341', 'CP210', 'FTDI', 'PROLIFIC']):
+                usb_ports.append(port)
+            # 排除COM1/COM2 (通常是主板物理串口)
+            elif port['device'] not in ['COM1', 'COM2', '/dev/ttyS0', '/dev/ttyS1']:
+                usb_ports.append(port)
 
-        # 如果没有USB串口，返回第一个
+        if usb_ports:
+            selected = usb_ports[0]
+            print(f"✓ 自动选择USB串口: {selected['device']} - {selected['description']}")
+            return selected['device']
+
+        # 如果只有COM1/COM2，警告用户
         if ports:
-            print(f"✓ 自动选择: {ports[0]['device']}")
+            print(f"⚠ 警告: 只找到主板串口 {ports[0]['device']}")
+            print(f"  这通常不是dummy机械臂的USB串口")
+            print(f"  请检查USB线是否连接，或手动指定端口")
+            print(f"✓ 尝试使用: {ports[0]['device']}")
             return ports[0]['device']
 
         return None
@@ -192,6 +205,12 @@ class SerialClient:
                     if bytes_written != len(message):
                         raise serial.SerialException(f"只发送了 {bytes_written}/{len(message)} 字节")
 
+                    # 调试信息（只在第一次发送时显示）
+                    if not hasattr(self, '_first_send_logged'):
+                        hex_msg = ' '.join(f'{b:02X}' for b in message)
+                        print(f"→ 发送: {hex_msg}")
+                        self._first_send_logged = True
+
                     # 发送间隔控制
                     time.sleep(self.send_interval)
                     return True
@@ -226,6 +245,7 @@ class SerialClient:
         consecutive_timeouts = 0
         max_consecutive_timeouts = 10
         buffer = bytearray()
+        first_data_received = False
 
         while not self._stop_receive:
             try:
@@ -233,6 +253,10 @@ class SerialClient:
                 if self.serial_conn.in_waiting > 0:
                     data = self.serial_conn.read(self.serial_conn.in_waiting)
                     if data:
+                        if not first_data_received:
+                            print(f"✓ 首次收到数据: {len(data)} 字节")
+                            first_data_received = True
+
                         buffer.extend(data)
                         consecutive_timeouts = 0
                         self.last_receive_time = time.time()
@@ -242,6 +266,9 @@ class SerialClient:
                             # 查找消息头 (0xBB)
                             header_index = buffer.find(0xBB)
                             if header_index == -1:
+                                # 没有找到消息头，清空缓冲区
+                                if len(buffer) > 0:
+                                    print(f"⚠ 缓冲区无效数据: {' '.join(f'{b:02X}' for b in buffer[:min(12, len(buffer))])}")
                                 buffer.clear()
                                 break
 
@@ -256,6 +283,7 @@ class SerialClient:
 
                                 # 转换为十六进制字符串
                                 hex_data = ' '.join(f'{b:02X}' for b in message)
+                                print(f"← 收到: {hex_data}")
 
                                 if self.callback:
                                     self.callback(hex_data)

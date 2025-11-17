@@ -180,6 +180,12 @@ def controls(client) -> None:
          update(data)
 
     def register_cb():
+        # 防止重复连接
+        if hasattr(register_cb, 'polling_timer') and register_cb.polling_timer.active:
+            print("\n⚠ CAN总线已经连接，无需重复连接")
+            ui.notify('CAN总线已经在运行中', type='warning')
+            return
+
         print("\n=== 开始CAN通信 ===")
 
         # 先注册回调函数
@@ -193,14 +199,36 @@ def controls(client) -> None:
         result = send_msg(1, can_data.command_id['Get_Encoder_Estimates'], 0, 0)
 
         if result:
-            print("查询命令发送成功！")
+            print("✓ 查询命令发送成功！")
+            print("⏳ 等待设备响应...")
         else:
-            print("查询命令发送失败！")
+            print("✗ 查询命令发送失败！")
 
         # 启动定时轮询
         if not hasattr(register_cb, 'polling_timer'):
             register_cb.polling_timer = ui.timer(0.5, lambda: poll_motors())
-            print("已启动电机数据轮询定时器（0.5秒间隔）")
+            print("✓ 已启动电机数据轮询定时器（0.5秒间隔）")
+            print("\n如果10秒内未收到数据，请检查:")
+            print("  1. 串口是否正确 (应该是COM3/COM7等USB串口)")
+            print("  2. 设备是否上电")
+            print("  3. 波特率是否匹配 (115200)")
+
+        # 5秒后检查是否收到数据
+        ui.timer(5.0, lambda: check_connection_status(), once=True)
+
+    def check_connection_status():
+        """检查是否收到数据"""
+        if info_status.text == 'CAN BUS: Not enabled':
+            print("\n⚠ 警告: 5秒内未收到设备响应！")
+            print("可能原因:")
+            print("  1. 连接到了错误的串口 (COM1通常不是USB设备)")
+            print("  2. 设备未运行或未上电")
+            print("  3. 波特率不匹配")
+            print("\n建议:")
+            print("  1. 运行: python reset_port.py list")
+            print("  2. 查找USB串口 (通常是COM3或更高)")
+            print("  3. 手动指定正确的端口")
+            ui.notify('未收到设备响应，请检查串口连接', type='warning')
 
     def poll_motors():
         """定期轮询所有电机状态"""
