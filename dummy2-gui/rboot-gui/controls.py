@@ -179,15 +179,43 @@ def controls(client) -> None:
 
     def udp_callback(data):
          update(data)
-    
+
+    # 定时器变量
+    position_timer = None
+
+    def request_all_positions():
+        """定时请求所有电机的位置数据"""
+        try:
+            for i in range(1, 7):  # 请求6个电机的位置
+                client.send_message(i, can_data.command_id['Get_Encoder_Estimates'],
+                                  struct.pack('<I', 0), struct.pack('<I', 0),
+                                  can_data.Message_type['short'])
+        except Exception as e:
+            print(f"请求位置数据失败: {e}")
+
     def register_cb():
-        client.register_callback(udp_callback) 
-        send_msg(1, can_data.command_id['Set_Axis_State'], can_data.AxisState['IDLE'], can_data.Message_type['short'])        
+        nonlocal position_timer
+        client.register_callback(udp_callback)
+        info_status.set_text(f'CAN BUS: Enabled')
+        info_status.style('color: #03fc1c; font-weight: bold')
+
+        # 启动定时器，每50ms请求一次位置数据
+        if position_timer:
+            position_timer.cancel()
+        position_timer = ui.timer(0.05, request_all_positions)
+        ui.notify('CAN总线已连接，开始接收数据', type='positive')
 
     def unregister_cb():
-        client.unregister_callback() 
+        nonlocal position_timer
+        # 停止定时器
+        if position_timer:
+            position_timer.cancel()
+            position_timer = None
+
+        client.unregister_callback()
         info_status.set_text(f'CAN BUS: Not enabled')
         info_status.style('color: #fc0320; font-weight: bold')
+        ui.notify('CAN总线已断开', type='warning')
 
     # with ui.row().classes('w-full justify-between items-center'):
     #     with ui.row():
@@ -520,7 +548,6 @@ def controls(client) -> None:
                         elif type == can_data.command_id['Get_Temperature']:
                              f, m = struct.unpack('<ff', body)
                              print(f, m)
-    # ui.timer(0.01, update)
-    # ui.timer.cancel
+
     update_list()
 
