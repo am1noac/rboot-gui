@@ -227,33 +227,26 @@ class TextSerialClient:
         Returns:
             list: 6个关节角度 [J1, J2, J3, J4, J5, J6]，失败返回None
         """
-        print("[位置查询] get_current_position() 被调用")
-
         if not self.connected or self.serial_conn is None:
             print("✗ 未连接，无法获取位置")
             return None
 
-        print(f"[位置查询] 串口状态: connected={self.connected}")
-
-        print("[位置查询] 准备获取发送锁...")
         with self.send_lock:
-            print("[位置查询] 已获取发送锁")
             try:
-                # 清空接收缓冲区
-                print("[位置查询] 正在清空缓冲区...")
+                # 清空接收和发送缓冲区
                 self.serial_conn.reset_input_buffer()
-                print("[位置查询] 缓冲区已清空")
+                self.serial_conn.reset_output_buffer()
+                time.sleep(0.1)
 
                 # 发送查询命令
                 command = "#GETJPOS\r\n"
-                print(f"[位置查询] 正在发送命令: {command.strip()}")
                 bytes_written = self.serial_conn.write(command.encode('utf-8'))
                 self.serial_conn.flush()
 
                 print(f"✓ 发送查询命令: #GETJPOS ({bytes_written} 字节)")
 
-                # 等待响应
-                time.sleep(0.5)
+                # 增加等待时间，给设备更多时间响应
+                time.sleep(0.8)
 
                 waiting = self.serial_conn.in_waiting
                 print(f"[位置查询] 缓冲区有 {waiting} 字节等待读取")
@@ -277,6 +270,9 @@ class TextSerialClient:
                         return None
                 else:
                     print("✗ 没有收到响应 (超时或设备无响应)")
+                    # 尝试再次清空缓冲区，恢复设备状态
+                    self.serial_conn.reset_input_buffer()
+                    self.serial_conn.reset_output_buffer()
                     return None
 
             except Exception as e:

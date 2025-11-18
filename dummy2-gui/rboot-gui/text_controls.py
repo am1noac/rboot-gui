@@ -149,7 +149,6 @@ def text_controls(client):
 
         def update_position_display():
             """更新位置显示"""
-            print("[监控] update_position_display() 定时器触发")
             current_pos = client.get_current_position()
             if current_pos:
                 # 更新角度输入框
@@ -159,30 +158,23 @@ def text_controls(client):
                 pos_str = f"当前位置: J1={current_pos[0]:.1f}° J2={current_pos[1]:.1f}° J3={current_pos[2]:.1f}° J4={current_pos[3]:.1f}° J5={current_pos[4]:.1f}° J6={current_pos[5]:.1f}°"
                 position_display.set_text(pos_str)
                 position_display.style('color: #03fc1c; font-family: monospace; font-weight: bold')
-                print(f"[监控] 位置已更新显示")
-            else:
-                print(f"[监控] 未能获取到位置数据")
 
         def toggle_monitoring():
             """切换位置监控"""
             nonlocal position_timer, monitoring
 
-            print(f"[监控] toggle_monitoring() 被调用, 当前状态: monitoring={monitoring}")
-
             if not monitoring:
                 # 启动监控
-                print("[监控] 正在启动位置监控...")
-                position_timer = ui.timer(1.0, update_position_display)  # 每1秒更新
+                position_timer = ui.timer(2.5, update_position_display)  # 每2.5秒更新（降低频率）
                 monitoring = True
                 monitor_btn.set_text('停止位置监控')
                 monitor_btn.props('color=negative')
-                teaching_status.set_text('位置监控: 已启动')
+                teaching_status.set_text('位置监控: 已启动 (每2.5秒更新)')
                 teaching_status.style('color: #03fc1c; font-weight: bold')
-                ui.notify('位置监控已启动，每秒自动读取位置', type='positive')
-                print("[监控] ✓ 位置监控已启动")
+                ui.notify('✓ 位置监控已启动，每2.5秒自动读取位置', type='positive')
+                print("✓ 位置监控已启动（间隔2.5秒）")
             else:
                 # 停止监控
-                print("[监控] 正在停止位置监控...")
                 if position_timer:
                     position_timer.cancel()
                     position_timer = None
@@ -192,7 +184,7 @@ def text_controls(client):
                 teaching_status.set_text('位置监控: 已停止')
                 teaching_status.style('color: #888; font-weight: bold')
                 ui.notify('位置监控已停止', type='info')
-                print("[监控] ✓ 位置监控已停止")
+                print("✓ 位置监控已停止")
 
         def read_and_record():
             """读取当前位置并记录"""
@@ -205,12 +197,23 @@ def text_controls(client):
 
                 # 记录位置
                 teaching_positions.append(current_pos.copy())
-                ui.notify(f'✓ 已记录位置 #{len(teaching_positions)}: J1={current_pos[0]:.1f}°, J2={current_pos[1]:.1f}°, J3={current_pos[2]:.1f}°', type='positive')
-                teaching_status.set_text(f'已记录 {len(teaching_positions)} 个位置')
-                teaching_status.style('color: #03fc1c; font-weight: bold')
+
+                # 显著提示
+                pos_summary = f'J1={current_pos[0]:.1f}° J2={current_pos[1]:.1f}° J3={current_pos[2]:.1f}°'
+                ui.notify(f'✓✓✓ 已成功记录位置 #{len(teaching_positions)} ✓✓✓\n{pos_summary}',
+                         type='positive',
+                         position='center',
+                         close_button=True,
+                         timeout=3000)
+
+                teaching_status.set_text(f'✓ 已记录 {len(teaching_positions)} 个位置')
+                teaching_status.style('color: #03fc1c; font-weight: bold; font-size: 16px')
                 update_positions_list()
+
+                print(f"✓✓✓ 已记录位置 #{len(teaching_positions)}: {current_pos}")
             else:
-                ui.notify('读取位置失败', type='negative')
+                ui.notify('✗ 读取位置失败 - 请检查设备连接', type='negative', position='center')
+                print("✗ 读取位置失败")
 
         with ui.row().classes('w-full'):
             monitor_btn = ui.button('启动位置监控', on_click=toggle_monitoring, icon='visibility', color='primary') \
@@ -254,13 +257,23 @@ def text_controls(client):
         def save_sequence():
             """保存动作序列到文件"""
             if not teaching_positions:
-                ui.notify('没有可保存的位置', type='warning')
+                ui.notify('⚠ 没有可保存的位置，请先记录位置', type='warning', position='center')
                 return
 
-            filename = 'teaching_sequence.json'
-            with open(filename, 'w') as f:
-                json.dump(teaching_positions, f, indent=2)
-            ui.notify(f'已保存到 {filename}', type='positive')
+            try:
+                filename = 'teaching_sequence.json'
+                with open(filename, 'w') as f:
+                    json.dump(teaching_positions, f, indent=2)
+
+                ui.notify(f'✓✓✓ 成功保存 {len(teaching_positions)} 个位置到文件 ✓✓✓\n文件: {filename}',
+                         type='positive',
+                         position='center',
+                         close_button=True,
+                         timeout=3000)
+                print(f"✓ 已保存 {len(teaching_positions)} 个位置到 {filename}")
+            except Exception as e:
+                ui.notify(f'✗ 保存失败: {e}', type='negative', position='center')
+                print(f"✗ 保存失败: {e}")
 
         def load_sequence():
             """从文件加载动作序列"""
@@ -270,23 +283,43 @@ def text_controls(client):
                     loaded = json.load(f)
                 teaching_positions.clear()
                 teaching_positions.extend(loaded)
-                ui.notify(f'已加载 {len(teaching_positions)} 个位置', type='positive')
+
+                ui.notify(f'✓✓✓ 成功加载 {len(teaching_positions)} 个位置 ✓✓✓\n文件: {filename}',
+                         type='positive',
+                         position='center',
+                         close_button=True,
+                         timeout=3000)
+
+                teaching_status.set_text(f'✓ 已加载 {len(teaching_positions)} 个位置')
+                teaching_status.style('color: #03fc1c; font-weight: bold; font-size: 16px')
                 update_positions_list()
+                print(f"✓ 已从 {filename} 加载 {len(teaching_positions)} 个位置")
             except FileNotFoundError:
-                ui.notify('文件不存在', type='negative')
+                ui.notify(f'✗ 文件不存在: {filename}\n请先保存序列', type='negative', position='center')
+                print(f"✗ 文件不存在: {filename}")
             except Exception as e:
-                ui.notify(f'加载失败: {e}', type='negative')
+                ui.notify(f'✗ 加载失败: {e}', type='negative', position='center')
+                print(f"✗ 加载失败: {e}")
 
         def update_positions_list():
             """更新位置列表显示"""
             positions_container.clear()
             with positions_container:
                 if not teaching_positions:
-                    ui.label('(暂无记录的位置)')
+                    ui.label('(暂无记录的位置)').style('color: #888; font-style: italic')
                 else:
+                    ui.markdown(f'### 已记录的位置 ({len(teaching_positions)} 个)')
                     for i, pos in enumerate(teaching_positions):
                         with ui.card().classes('w-full'):
-                            ui.label(f'位置 {i+1}: J1={pos[0]:.1f}°, J2={pos[1]:.1f}°, J3={pos[2]:.1f}°, J4={pos[3]:.1f}°, J5={pos[4]:.1f}°, J6={pos[5]:.1f}°')
+                            with ui.row().classes('w-full items-center'):
+                                ui.label(f'位置 {i+1}: J1={pos[0]:.1f}°, J2={pos[1]:.1f}°, J3={pos[2]:.1f}°, J4={pos[3]:.1f}°, J5={pos[4]:.1f}°, J6={pos[5]:.1f}°').classes('flex-grow')
+
+                                def delete_position(index=i):
+                                    teaching_positions.pop(index)
+                                    ui.notify(f'已删除位置 {index+1}', type='info')
+                                    update_positions_list()
+
+                                ui.button(icon='delete', on_click=delete_position, color='red').props('size=sm flat')
 
         with ui.row().classes('w-full'):
             ui.button('记录当前位置', on_click=record_position, icon='add_location', color='positive')
